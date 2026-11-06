@@ -1,0 +1,359 @@
+{
+ "_說明": "行事曆的分類設定。cats＝分類（scope：econ＝經濟事件，預設顯示；other＝經濟以外，預設隱藏，要在行事曆勾選「顯示經濟以外」才看得到；事件寫 main:true 或把 scope 設 econ 就會升級成主要事件）。rules＝關鍵字規則，由上往下第一條符合的分類生效（英文字詞比對字首，中文直接比對），tags 會一起掛上。feeds＝可訂閱的 ICS 行事曆（例如賽事、公司法說會的公開 iCal 網址），預設空白，網址請自行確認可用後再填。事件在 events.json 自己寫 cat／tags 則優先於規則。",
+ "default_auto": "growth",
+ "default_manual": "misc",
+ "cats": [
+  {
+   "id": "policy",
+   "label": "貨幣政策",
+   "scope": "econ"
+  },
+  {
+   "id": "infl",
+   "label": "通膨物價",
+   "scope": "econ"
+  },
+  {
+   "id": "job",
+   "label": "就業",
+   "scope": "econ"
+  },
+  {
+   "id": "growth",
+   "label": "景氣成長",
+   "scope": "econ"
+  },
+  {
+   "id": "housing",
+   "label": "不動產",
+   "scope": "econ"
+  },
+  {
+   "id": "ins",
+   "label": "保險",
+   "scope": "econ"
+  },
+  {
+   "id": "fin",
+   "label": "金融市場",
+   "scope": "econ"
+  },
+  {
+   "id": "trade",
+   "label": "貿易",
+   "scope": "econ"
+  },
+  {
+   "id": "energy",
+   "label": "能源商品",
+   "scope": "econ"
+  },
+  {
+   "id": "politics",
+   "label": "政治",
+   "scope": "econ"
+  },
+  {
+   "id": "tech",
+   "label": "產業科技",
+   "scope": "econ"
+  },
+  {
+   "id": "misc",
+   "label": "其他經濟",
+   "scope": "econ"
+  },
+  {
+   "id": "esport",
+   "label": "電競",
+   "scope": "other"
+  },
+  {
+   "id": "sport",
+   "label": "體育",
+   "scope": "other"
+  },
+  {
+   "id": "ent",
+   "label": "娛樂",
+   "scope": "other"
+  }
+ ],
+ "rules": [
+  {
+   "cat": "esport",
+   "tags": [
+    "娛樂"
+   ],
+   "kw": [
+    "英雄聯盟",
+    "league of legends",
+    "電競",
+    "esports",
+    "valorant",
+    "dota"
+   ]
+  },
+  {
+   "cat": "sport",
+   "tags": [],
+   "kw": [
+    "世界盃",
+    "world cup",
+    "奧運",
+    "olympic",
+    "nba",
+    "mlb",
+    "nfl",
+    "經典賽",
+    "超級盃",
+    "super bowl",
+    "溫布敦",
+    "wimbledon"
+   ]
+  },
+  {
+   "cat": "ent",
+   "tags": [],
+   "kw": [
+    "演唱會",
+    "金馬獎",
+    "金曲獎",
+    "奧斯卡",
+    "oscar",
+    "grammy",
+    "影展"
+   ]
+  },
+  {
+   "cat": "policy",
+   "tags": [
+    "央行"
+   ],
+   "kw": [
+    "federal funds rate",
+    "fomc",
+    "interest rate",
+    "rate statement",
+    "rate decision",
+    "monetary policy",
+    "refinancing rate",
+    "policy rate",
+    "bank rate",
+    "press conference",
+    "meeting minutes",
+    "ecb",
+    "boj",
+    "boe",
+    "mpc",
+    "央行",
+    "利率決議",
+    "理監事",
+    "聯準會",
+    "記者會",
+    "會議紀要"
+   ]
+  },
+  {
+   "cat": "housing",
+   "tags": [
+    "不動產"
+   ],
+   "kw": [
+    "home sales",
+    "housing",
+    "building permits",
+    "home price",
+    "house price",
+    "hpi",
+    "mortgage",
+    "construction spending",
+    "nahb",
+    "不動產",
+    "房價",
+    "房市",
+    "房貸",
+    "房地產",
+    "預售屋",
+    "實價登錄",
+    "新青安",
+    "房屋"
+   ]
+  },
+  {
+   "cat": "ins",
+   "tags": [
+    "保險"
+   ],
+   "kw": [
+    "insurance",
+    "保險",
+    "壽險",
+    "保單",
+    "保費",
+    "金管會",
+    "責任準備金",
+    "ifrs 17",
+    "ifrs17",
+    "資本適足",
+    "保發中心",
+    "勞保",
+    "健保",
+    "國民年金"
+   ]
+  },
+  {
+   "cat": "energy",
+   "tags": [
+    "能源"
+   ],
+   "kw": [
+    "crude oil",
+    "oil inventories",
+    "natural gas",
+    "gasoline",
+    "opec",
+    "原油",
+    "油價",
+    "天然氣"
+   ]
+  },
+  {
+   "cat": "infl",
+   "tags": [
+    "通膨"
+   ],
+   "kw": [
+    "cpi",
+    "ppi",
+    "pce",
+    "inflation",
+    "price index",
+    "deflator",
+    "物價",
+    "通膨"
+   ]
+  },
+  {
+   "cat": "job",
+   "tags": [
+    "就業"
+   ],
+   "kw": [
+    "employment",
+    "unemployment",
+    "jobless",
+    "claims",
+    "jolts",
+    "payroll",
+    "earnings",
+    "job openings",
+    "失業",
+    "就業",
+    "非農",
+    "職缺",
+    "時薪"
+   ]
+  },
+  {
+   "cat": "trade",
+   "tags": [
+    "貿易"
+   ],
+   "kw": [
+    "trade balance",
+    "imports",
+    "exports",
+    "current account",
+    "tariff",
+    "貿易",
+    "關稅",
+    "外銷訂單",
+    "出口",
+    "進口"
+   ]
+  },
+  {
+   "cat": "politics",
+   "tags": [
+    "政治"
+   ],
+   "kw": [
+    "election",
+    "referendum",
+    "debt ceiling",
+    "shutdown",
+    "選舉",
+    "投票",
+    "公投",
+    "候選人",
+    "當選",
+    "立法院",
+    "總統"
+   ]
+  },
+  {
+   "cat": "fin",
+   "tags": [
+    "債市"
+   ],
+   "kw": [
+    "auction",
+    "treasury",
+    "bond",
+    "bank lending",
+    "money supply",
+    "tic ",
+    "標售",
+    "公債",
+    "殖利率",
+    "外資"
+   ]
+  },
+  {
+   "cat": "tech",
+   "tags": [
+    "產業"
+   ],
+   "kw": [
+    "財報",
+    "法說",
+    "發表會",
+    "半導體",
+    "晶片",
+    "台積電",
+    "輝達",
+    "computex",
+    "earnings call"
+   ]
+  },
+  {
+   "cat": "growth",
+   "tags": [
+    "景氣"
+   ],
+   "kw": [
+    "gdp",
+    "pmi",
+    "retail sales",
+    "industrial production",
+    "sentiment",
+    "confidence",
+    "ifo",
+    "tankan",
+    "manufacturing",
+    "services",
+    "durable goods",
+    "philly fed",
+    "empire state",
+    "ism",
+    "business climate",
+    "景氣",
+    "零售",
+    "製造業",
+    "服務業"
+   ]
+  }
+ ],
+ "feeds": []
+}

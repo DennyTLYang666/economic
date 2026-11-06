@@ -1,0 +1,483 @@
+# -*- coding: utf-8 -*-
+"""用假伺服器跑整條管線（不連外網）。執行：python -m unittest discover -s tests -v"""
+import json
+import os
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import mock_server  # noqa: E402
+from pipeline import build, fetch, run  # noqa: E402
+
+REPO = Path(__file__).resolve().parent.parent
+
+
+class Base(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.srv = mock_server.start()
+        cls.env = mock_server.env_for(cls.srv)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.shutdown()
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        shutil.copytree(REPO / "config", self.tmp / "config")
+        (self.tmp / "data" / "series").mkdir(parents=True)  # 每個測試從空歷史開始，不受 repo 內資料影響
+        self._saved = dict(os.environ)
+        os.environ.update(self.env)
+        os.environ["ECO_BACKOFF"] = "0"
+        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP"):
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._saved)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def go(self, *extra):
+        return run.main(["--root", str(self.tmp), "--pause", "0", *extra])
+
+    def doc(self, name):
+        return json.loads((self.tmp / "data" / "site" / (name + ".json")).read_text(encoding="utf-8"))
+
+
+class TestCrashDay(Base):
+    def test_full_daily_run(self):
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        ov = self.doc("overview")
+        self.assertEqual(ov["mood"]["label"], "恐慌")
+        self.assertEqual([g["id"] for g in ov["groups"]], ["us", "ai", "asia", "twd", "twd_c", "fx", "rates", "risk", "cmd", "f_dev", "f_em", "f_theme", "f_bond", "f_mix", "f_cash"])
+        tiles = {t["id"]: t for g in ov["groups"] for t in g["tiles"]}
+        self.assertEqual(len(tiles), 90)
+        self.assertIn("silver", tiles)
+        self.assertEqual([t["id"] for t in next(g for g in ov["groups"] if g["id"] == "rates")["tiles"]], ["us3m", "us2y", "us5y", "us10y", "us30y"])
+        self.assertTrue(all(t.get("q") for t in tiles.values()))  # 每個方塊都能查新聞
+        grp = {g["id"]: [t["id"] for t in g["tiles"]] for g in ov["groups"]}
+        self.assertIn("usdtwd", grp["twd"])
+        self.assertTrue({"twd_eur", "twd_jpy", "twd_cny", "twd_aud", "twd_zar"} <= set(grp["twd"]))
+        self.assertTrue({"vix", "vxn", "move", "skew", "ovx", "gvz", "hyoas"} <= set(grp["risk"]))
+        self.assertTrue({"audusd", "gbpusd", "usdcny", "usdzar"} <= set(grp["fx"]))
+        self.assertAlmostEqual(tiles["twd_eur"]["value"], 1.1231 * 32.876, places=2)  # 歐元兌台幣＝EURUSD×USDTWD
+        self.assertAlmostEqual(tiles["twd_jpy"]["value"], 32.876 / 157.9, places=4)  # 1 日圓，不乘 100
+        self.assertAlmostEqual(tiles["twd_btc"]["value"], 98000.0 * 32.876, delta=1)  # 加密貨幣＝美元報價×USDTWD
+        self.assertAlmostEqual(tiles["twd_usdt"]["value"], 1.0003 * 32.876, places=3)
+        self.assertEqual(set(grp["twd_c"]), {"twd_usdt", "twd_usdc", "twd_btc", "twd_eth", "twd_sol"})
+        self.assertNotIn("x_raw", grp)
+        tags = [h["tag"] for h in ov["highlights"]]
+        for need in ("新台幣", "國際匯率", "市場風險", "亞歐股市", "基金類別", "美債利率"):
+            self.assertIn(need, tags)
+        self.assertTrue(all(h["link"].startswith("#") and h["sub"] for h in ov["highlights"]))
+        self.assertAlmostEqual(tiles["sox"]["chg"], -12.25, places=1)
+        self.assertAlmostEqual(tiles["twii"]["value"], 41574.72, places=1)
+        self.assertFalse(any(t["stale"] for t in tiles.values()))
+        text = " ".join(h["text"] for h in ov["highlights"])
+        self.assertIn("費半 −12.25%", text)
+        self.assertIn("VIX", text)
+        self.assertIn("尚未反映", text)  # ADR 跌 11%，台股台積電還停在昨天
+        # 新加入的標的會自動補抓兩年歷史
+        daily = (self.tmp / "data" / "series" / "daily.csv").read_text(encoding="utf-8")
+        self.assertGreater(daily.count("\nmu,"), 400)
+        macro = {m["id"]: m for m in self.doc("macro")}
+        self.assertEqual(len(macro), 37)
+        self.assertEqual(sum(1 for m in macro.values() if m["country"] == "us"), 15)
+        self.assertIsNotNone(macro["us_cpi"]["next"])
+        self.assertEqual(self.doc("lights")["products"][0]["id"], "twii")
+        meta = self.doc("meta")
+        self.assertEqual(meta["sources"]["yahoo"]["fail"], 0)
+        self.assertEqual(meta["problems"], [])
+        self.assertTrue((self.tmp / "data" / "site" / "overview.js").exists())  # file:// 備援
+
+    def test_snapshot_skips_fred_when_present(self):
+        self.go("--mode", "daily")
+        before = (self.tmp / "data" / "series" / "fred.csv").read_text(encoding="utf-8")
+        self.assertEqual(self.go("--mode", "snapshot"), 0)
+        self.assertEqual(before, (self.tmp / "data" / "series" / "fred.csv").read_text(encoding="utf-8"))
+
+    def test_idempotent(self):
+        self.go("--mode", "daily")
+        a = (self.tmp / "data" / "series" / "daily.csv").read_text(encoding="utf-8")
+        self.go("--mode", "daily")
+        self.assertEqual(a, (self.tmp / "data" / "series" / "daily.csv").read_text(encoding="utf-8"))
+
+
+class TestFailures(Base):
+    def test_some_symbols_fail(self):
+        os.environ["MOCK_FAIL"] = "MU"
+        self.go("--mode", "daily")  # 先有一份歷史：sox 抓得到、mu 一直抓不到
+        os.environ["MOCK_FAIL"] = "MU,^SOX"
+        self.assertEqual(self.go("--mode", "daily"), 2)  # 網站有更新，但有警告
+        tiles = {t["id"]: t for g in self.doc("overview")["groups"] for t in g["tiles"]}
+        self.assertNotIn("mu", tiles)  # 從沒抓到過 → 不顯示
+        self.assertTrue(tiles["sox"]["stale"])  # 有舊資料 → 保留並標示
+        self.assertIn("error", tiles["sox"])
+        self.assertTrue(self.doc("meta")["problems"])
+
+    def test_everything_down_keeps_old_site(self):
+        self.go("--mode", "daily")
+        before = (self.tmp / "data" / "site" / "overview.json").read_text(encoding="utf-8")
+        os.environ["MOCK_YAHOO_DOWN"] = "1"
+        self.assertEqual(self.go("--mode", "snapshot"), 1)
+        self.assertEqual(before, (self.tmp / "data" / "site" / "overview.json").read_text(encoding="utf-8"))
+
+    def test_absurd_price_is_rejected(self):
+        self.go("--mode", "daily")  # 先建立歷史，才有「合理範圍」可比
+        os.environ["MOCK_JUMP"] = "^TWII=2.0"
+        self.go("--mode", "snapshot")
+        tw = next(t for g in self.doc("overview")["groups"] for t in g["tiles"] if t["id"] == "twii")
+        self.assertTrue(tw["stale"])
+        self.assertIn("疑似資料異常", tw["error"])
+        self.assertLess(tw["value"], 50000)  # 沒被寫入
+
+    def test_offline_rebuild(self):
+        self.assertEqual(self.go("--offline"), 0)
+        self.assertEqual(self.doc("meta")["mode"], "offline")
+
+
+class TestFundsAndNews(Base):
+    def test_funds_built(self):
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        d = self.doc("funds")
+        self.assertEqual([t["id"] for t in d["tiers"]], [1, 2, 3, 4, 5, 6])
+        for co in ("tlife", "nanshan"):
+            comp = d["companies"][co]
+            self.assertEqual(sum(comp["counts"].values()), comp["count"])
+            for tier in "123456":
+                picks = comp["picks"].get(tier, [])
+                self.assertLessEqual(len(picks), 3)
+                self.assertTrue(all(p["tier"] == int(tier) for p in picks))
+                bases = [p["k"].split("-")[0] for p in picks]
+                self.assertEqual(len(bases), len(set(bases)))  # 同一檔基金不重複推薦
+            self.assertGreaterEqual(len([t for t in "123456" if comp["picks"].get(t)]), 5)  # 高風險到貨幣型都有
+        self.assertTrue(any(t["idx"] for t in d["themes"]))
+        self.assertIn("idx", d)
+        u = self.doc("funds_tlife")
+        self.assertIn("theme", u["cols"])
+        self.assertEqual(len(u["rows"]), d["companies"]["tlife"]["count"])
+        self.assertTrue((self.tmp / "data" / "site" / "funds_tlife.js").exists())
+
+    def test_ineligible_never_picked(self):
+        self.go("--mode", "daily")
+        d = self.doc("funds")
+        names = [p["n"] for c in d["companies"].values() for ps in c["picks"].values() for p in ps]
+        self.assertFalse(any("暫停" in n for n in names))
+
+    def test_new_and_dropped_tracked(self):
+        os.environ["MOCK_FUND_DROP"] = "0"
+        self.go("--mode", "daily")
+        first = self.doc("funds")["companies"]["tlife"]["count"]
+        os.environ["MOCK_FUND_DROP"] = "3"
+        self.go("--mode", "daily")
+        ch = self.doc("funds")["companies"]["tlife"]["changes"]
+        self.assertEqual(len([c for c in ch if c["type"] == "下架"]), 3)
+        self.assertEqual(self.doc("funds")["companies"]["tlife"]["count"], first - 3)
+
+    def test_fund_failure_keeps_other_company_and_exit_code(self):
+        os.environ["MOCK_FUND_FAIL"] = "tlife"
+        code = self.go("--mode", "daily")
+        self.assertEqual(code, 2)
+        d = self.doc("funds")
+        self.assertIn("nanshan", d["companies"])
+        self.assertTrue(any("基金" in p for p in self.doc("meta")["problems"]))
+
+    def test_news_failure_is_not_fatal(self):
+        os.environ["MOCK_NEWS_FAIL"] = "1"
+        code = self.go("--mode", "daily")
+        self.assertIn(code, (0, 2))
+        self.assertTrue((self.tmp / "data" / "site" / "overview.json").exists())
+
+    def test_news_has_items(self):
+        self.go("--mode", "daily")
+        n = self.doc("news")
+        self.assertIn("tw2330", n["items"])
+        it = n["items"]["tw2330"][0]
+        self.assertTrue(it["t"] and it["u"].startswith("http"))
+
+    def test_snapshot_does_not_refetch_funds(self):
+        self.go("--mode", "daily")
+        before = (self.tmp / "data" / "site" / "funds.json").read_text(encoding="utf-8")
+        self.assertEqual(self.go("--mode", "snapshot"), 0)
+        self.assertEqual(before, (self.tmp / "data" / "site" / "funds.json").read_text(encoding="utf-8"))
+
+    def test_derived_charts(self):
+        self.go("--mode", "daily")
+        charts = {c["id"]: c for c in self.doc("trends")["charts"]}
+        self.assertIn("spreads", charts)
+        self.assertIn("gs_ratio", charts)
+        self.assertTrue(self.doc("trends")["curve"])
+
+
+class TestFundUnits(unittest.TestCase):
+    def test_decode_cp950(self):
+        from pipeline import funds
+        self.assertEqual(funds.decode("基金".encode("cp950")), "基金")
+        self.assertEqual(funds.decode("基金".encode("utf-8")), "基金")
+
+    def test_clean_name_strips_disclaimer(self):
+        from pipeline import funds
+        n = funds.clean_name("貝萊德環球非投資等級債券基金A6美元(本基金有相當比重投資於非投資等級之高風險債券)")
+        self.assertNotIn("高風險", n)
+        self.assertIn("貝萊德", n)
+
+    def test_classifier_on_fixtures(self):
+        from pipeline import funds
+        import fund_fixtures
+        cfg = json.loads((REPO / "config" / "fund_themes.json").read_text(encoding="utf-8"))
+        cls = funds.Classifier(cfg)
+        for name, cat, ty, want in fund_fixtures.SEEDS + fund_fixtures.EXTRA:
+            f = {"n": funds.clean_name(name), "cat": cat, "ty": ty}
+            self.assertEqual(cls.theme(f)["id"], want, name)
+
+    def test_html_in_names_is_stripped(self):
+        from pipeline import funds
+        for raw in ('景順永續性環球數據趨動基金A-穩定月配息股美元<span class="fundname-warning"></span>',
+                    '富蘭克林坦伯頓全球投資系列穩定月收益基金美元A<span class="fundname-warning"></span>'):
+            n = funds.clean_name(raw)
+            self.assertNotIn("<", n)
+            self.assertNotIn("fundname", n)
+        f = funds.normalize({"V40": "NS1-F1", "V3": '測試基金<span class="fundname-warning"></span>', "V41": "B"}, "nanshan")
+        self.assertEqual(f["n"], "測試基金")
+        self.assertNotIn("<", f["raw"])
+
+    def test_diff_ids(self):
+        from pipeline import funds
+        from datetime import date
+        t = date(2026, 11, 6)
+        new, ch = funds.diff_ids(None, [{"k": "A", "n": "a"}], t)
+        self.assertEqual(ch, [])
+        new2, ch2 = funds.diff_ids(new, [{"k": "B", "n": "b"}], t)
+        self.assertEqual(sorted(c["type"] for c in ch2), ["下架", "新增"])
+
+
+class TestMacroAndGroups(Base):
+    def test_macro_fields(self):
+        self.go("--mode", "daily")
+        m = {x["id"]: x for x in self.doc("macro")}
+        self.assertEqual(len(m), 37)
+        for x in m.values():
+            if x.get("empty"):
+                continue
+            self.assertIn(x["verdict"], ("好", "壞", "持平"))
+            self.assertTrue(x["asof"] and x["rec"])
+        us = [x for x in m.values() if x["country"] == "us"]
+        self.assertEqual(sorted(x["rec"] for x in us), list(range(1, 16)))
+        self.assertTrue(m["us_claims"]["weekly"])
+
+    def test_macro_countries(self):
+        self.go("--mode", "daily")
+        m = {x["id"]: x for x in self.doc("macro")}
+        self.assertEqual({x["country"] for x in m.values()}, {"us", "eu", "jp", "tw", "uk", "cn"})
+        # FRED 直取
+        self.assertEqual(m["eu_ecb"]["value"], 2.0)
+        self.assertEqual(m["eu_ecb"]["prev"], 2.25)
+        # 國發會 CSV
+        self.assertEqual(m["tw_signal"]["src"], "ndc")
+        self.assertEqual(m["tw_signal"]["value"], 29.0)
+        # 行事曆累積：日本 CPI 實際值；尚無資料者為空白卡
+        self.assertEqual(m["jp_cpi"]["value"], 2.1)
+        self.assertEqual(m["jp_cpi"]["prev"], 1.9)
+        self.assertTrue(m["jp_gdp"]["empty"])
+        self.assertTrue(m["cn_cpi"].get("next"))
+        self.assertEqual(self.doc("meta")["problems"], [])
+
+    def test_ndc_failure_is_soft(self):
+        os.environ["MOCK_NDC_FAIL"] = "1"
+        try:
+            self.assertEqual(self.go("--mode", "daily"), 2)  # 部分來源失敗＝2，但其他照常產出
+        finally:
+            os.environ.pop("MOCK_NDC_FAIL", None)
+        m = {x["id"]: x for x in self.doc("macro")}
+        self.assertTrue(m["tw_signal"]["empty"])
+        self.assertEqual(m["eu_ecb"]["value"], 2.0)
+
+    def test_parse_ndc_and_num(self):
+        from pipeline import fetch, build
+        txt = "\ufeff統計期,景氣對策信號綜合分數,失業率(%)\n202509,24,3.4\n202510,25,3.3\n"
+        out = fetch.parse_ndc(txt, {"景氣對策信號綜合分數": "景氣對策信號綜合分數", "失業率": "失業率"})
+        self.assertEqual([v for _, v in out["景氣對策信號綜合分數"]], [24.0, 25.0])
+        self.assertEqual(out["失業率"][-1][1], 3.3)
+        cr = txt.replace("\n", "\r")  # 只有 CR 換行也要能讀
+        self.assertEqual(fetch.parse_ndc(cr, {"失業率": "失業率"})["失業率"][-1][1], 3.3)
+        self.assertEqual(build._num("-0.4%"), -0.4)
+        self.assertEqual(build._num("1.2K"), 1.2)
+        self.assertIsNone(build._num(""))
+
+    def test_progress_lines(self):
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            self.go("--mode", "daily")
+        out = buf.getvalue()
+        self.assertIn("[1/", out)
+        self.assertIn("完成（daily", out)
+
+    def test_fund_groups(self):
+        self.go("--mode", "daily")
+        d = self.doc("funds")
+        self.assertEqual([g["id"] for g in d["groups"]], ["dev", "em", "theme", "bond", "mix", "cash"])
+        self.assertTrue(all(t["grp"] in {g["id"] for g in d["groups"]} for t in d["themes"]))
+        for g in d["groups"]:
+            self.assertIn("g_" + g["id"], d["idx"]["series"])  # 大分類合成指數
+            self.assertEqual(len(d["idx"]["series"]["g_" + g["id"]]), len(d["idx"]["dates"]))
+        self.assertEqual(sum(g["count"]["total"] for g in d["groups"]), sum(t["count"]["total"] for t in d["themes"]))
+        u = self.doc("funds_nanshan")
+        self.assertIn("grp", u["cols"])
+        gi = u["cols"].index("grp")
+        self.assertTrue(all(r[gi] in {g["id"] for g in d["groups"]} for r in u["rows"]))
+        comp = d["companies"]["nanshan"]
+        self.assertEqual(sum(comp["gcounts"].values()), comp["count"])
+
+    def test_news_keys_for_new_things(self):
+        self.go("--mode", "daily")
+        keys = set(self.doc("news")["items"])
+        for k in ("twd_eur", "vxn", "eem", "g:dev", "t:em"):
+            self.assertIn(k, keys)
+
+
+class TestMacroUnits(unittest.TestCase):
+    def test_verdict_direction(self):
+        from datetime import date
+        rows = lambda vals: [(date(2026, i + 1, 1), v) for i, v in enumerate(vals)]
+        fred = {"UNRATE": rows([4.0, 4.5]), "PAYEMS": rows([100000, 100100, 100300]), "UMCSENT": rows([60, 50])}
+        out = {m["id"]: m for m in build.build_macro(fred, [], date(2026, 11, 6))}
+        self.assertEqual(out["us_unrate"]["verdict"], "壞")   # 失業率上升
+        self.assertEqual(out["us_nfp"]["verdict"], "好")      # 新增就業 200 vs 100
+        self.assertEqual(out["us_sent"]["verdict"], "壞")     # 信心下滑
+        self.assertEqual(out["us_unrate"]["score"], -2.5)
+
+    def test_derive_ops(self):
+        from datetime import date
+        d = date(2026, 11, 5)
+        cfg = {"derived": [{"id": "a", "name": "a", "short": "a", "a": "x", "b": "y", "op": "mul"},
+                           {"id": "b", "name": "b", "short": "b", "a": "x", "b": "y", "op": "div", "scale": 100}]}
+        out, _ = build.derive(cfg, {"x": [(d, 6.0)], "y": [(d, 3.0)]})
+        self.assertEqual(out["a"][0][1], 18.0)
+        self.assertEqual(out["b"][0][1], 200.0)
+
+
+class TestUnits(unittest.TestCase):
+    def test_streak(self):
+        self.assertEqual(build.streak([5, 4, 3, 2, 1]), -4)
+        self.assertEqual(build.streak([1, 2, 3, 2, 3]), 1)
+        self.assertEqual(build.streak([1, 1, 1]), 0)
+
+    def test_format(self):
+        self.assertEqual(build.sp(-3.2), "−3.20%")
+        self.assertEqual(build.sp(1.5, 1), "+1.5%")
+        self.assertEqual(build.md("2026-11-05"), "11/5")
+
+    def test_pick_range(self):
+        from datetime import date
+        t = date(2026, 11, 6)
+        self.assertEqual(fetch.pick_range(None, t), "2y")
+        self.assertEqual(fetch.pick_range(date(2026, 11, 5), t), "5d")
+        self.assertEqual(fetch.pick_range(date(2026, 10, 20), t), "1mo")
+        self.assertEqual(fetch.pick_range(date(2025, 1, 1), t), "2y")
+
+    def test_mood_levels(self):
+        mk = lambda **kw: {k: {"short": k, "chg": v[0], "value": v[1]} for k, v in kw.items()}
+        calm = build.build_mood(mk(vix=(0.5, 14), spx=(0.2, 1), ixic=(0.1, 1), sox=(0.3, 1), twii=(0.0, 1)))
+        self.assertEqual(calm["label"], "平穩")
+        rally = build.build_mood(mk(vix=(-5, 14), spx=(3.2, 1), ixic=(2, 1), sox=(1, 1), twii=(1, 1)))
+        self.assertEqual(rally["label"], "樂觀")
+        panic = build.build_mood(mk(vix=(60, 27), spx=(-4, 1), ixic=(-5.5, 1), sox=(-12, 1), twii=(-3, 1)))
+        self.assertEqual(panic["label"], "恐慌")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class TestCalendarTags(Base):
+    def test_full_run_tags_and_scope(self):
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        cal = self.doc("calendar")
+        self.assertTrue(all(e.get("cat") and e.get("catn") and "tags" in e and e.get("scope") in ("econ", "other") for e in cal))
+        lol = [e for e in cal if "英雄聯盟" in e["event"]]
+        if lol:  # 電競：經濟以外，預設不是主要事件
+            self.assertEqual((lol[0]["cat"], lol[0]["scope"], lol[0]["main"]), ("esport", "other", False))
+        fomc = next(e for e in cal if "聯準會利率決議" in e["event"])
+        self.assertEqual((fomc["cat"], fomc["scope"], fomc["main"]), ("policy", "econ", True))
+        ov = self.doc("overview")
+        self.assertTrue(all("hot" in h for h in ov["highlights"]))
+        self.assertTrue(any(h["hot"] for h in ov["highlights"]) and not all(h["hot"] for h in ov["highlights"]))
+        self.assertIn("加密貨幣", [h["tag"] for h in ov["highlights"]])
+        # 非經濟事件不會進「接下來」
+        self.assertFalse(any("英雄聯盟" in e["event"] for e in ov["events"]))
+
+
+class TestEventsUnits(unittest.TestCase):
+    def setUp(self):
+        from pipeline import events
+        self.ev = events
+        self.cfg = events.load_cfg(json.loads((REPO / "config" / "calendar.json").read_text(encoding="utf-8")))
+
+    def test_classify_auto_titles(self):
+        c = lambda t: self.ev.classify(t, self.cfg)[0]
+        self.assertEqual(c("Core CPI m/m"), "infl")
+        self.assertEqual(c("Unemployment Claims"), "job")
+        self.assertEqual(c("Federal Funds Rate"), "policy")
+        self.assertEqual(c("Building Permits"), "housing")
+        self.assertEqual(c("Crude Oil Inventories"), "energy")
+        self.assertEqual(c("30-y Bond Auction"), "fin")
+        self.assertEqual(c("ISM Manufacturing PMI"), "growth")
+        self.assertEqual(c("英雄聯盟全球總決賽"), "esport")
+        self.assertEqual(c("金管會公布壽險業資本適足率"), "ins")
+        self.assertIsNone(c("Something Unknown"))
+
+    def test_scope_and_main(self):
+        t = self.ev.tag_event
+        e = t({"event": "英雄聯盟 決賽", "importance": "M"}, self.cfg, "manual")
+        self.assertEqual((e["scope"], e["main"]), ("other", False))
+        e = t({"event": "英雄聯盟 決賽", "importance": "M", "main": True}, self.cfg, "manual")
+        self.assertTrue(e["main"])  # 升級成主要事件
+        e = t({"event": "九合一選舉投票", "cat": "politics", "tags": ["選舉", "能源"]}, self.cfg, "manual")
+        self.assertEqual((e["catn"], e["tags"], e["scope"], e["main"]), ("政治", ["選舉", "能源"], "econ", True))
+        e = t({"event": "未知事件"}, self.cfg, "auto")
+        self.assertEqual(e["cat"], "growth")  # 自動抓到的經濟數據，沒對上規則時當景氣成長
+
+    def test_parse_ics(self):
+        ics = ("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20261114T100000Z\r\nSUMMARY:決賽\\, 第一場\r\nDESCRIPTION:長長的\r\n 說明\r\nEND:VEVENT\r\n"
+               "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261120\r\nSUMMARY:全天事件\r\nEND:VEVENT\r\n"
+               "BEGIN:VEVENT\r\nDTSTART:20261121T100000Z\r\nSUMMARY:取消的\r\nSTATUS:CANCELLED\r\nEND:VEVENT\r\n"
+               "BEGIN:VEVENT\r\nDTSTART:20261122T100000Z\r\nRRULE:FREQ=WEEKLY\r\nSUMMARY:重複的\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+        evs = self.ev.parse_ics(ics)
+        self.assertEqual([(e["date"], e["time"], e["event"]) for e in evs], [("2026-11-14", "18:00", "決賽, 第一場"), ("2026-11-20", "", "全天事件")])
+        self.assertEqual(evs[0]["note"], "長長的說明")
+
+    def test_feeds_window_failure_and_merge(self):
+        from datetime import date
+        today = date(2026, 11, 6)
+        ics = "BEGIN:VEVENT\nDTSTART:20261114T100000Z\nSUMMARY:W 決賽\nEND:VEVENT\nBEGIN:VEVENT\nDTSTART:20300101T100000Z\nSUMMARY:太遠\nEND:VEVENT\n"
+        feeds = [{"name": "a", "url": "x", "cat": "esport", "country": "全球"}, {"name": "b", "url": "bad"}]
+
+        def fake(u):
+            if u == "bad":
+                raise fetch.SourceError("連不上")
+            return ics
+        evs, warns = self.ev.fetch_feeds(feeds, today, fetch=fake)
+        self.assertEqual([e["event"] for e in evs], ["W 決賽"])
+        self.assertEqual(len(warns), 1)
+        out = build.merge_calendar([], [], today, self.cfg, evs)
+        self.assertEqual((out[0]["cat"], out[0]["scope"], out[0]["main"]), ("esport", "other", False))
+
+    def test_add_event_cli(self):
+        from pipeline import add_event
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            shutil.copytree(REPO / "config", tmp / "config")
+            add_event.main(["--root", str(tmp), "--date", "2026-12-01", "--event", "實價登錄新制說明會", "--importance", "M"])
+            doc = json.loads((tmp / "config" / "events.json").read_text(encoding="utf-8"))
+            self.assertIn("實價登錄新制說明會", [e["event"] for e in doc["events"]])
+            with self.assertRaises(SystemExit):
+                add_event.main(["--root", str(tmp), "--date", "2026-12-01", "--event", "實價登錄新制說明會"])
+            with self.assertRaises(SystemExit):
+                add_event.main(["--root", str(tmp), "--date", "2026-13-01", "--event", "x"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)

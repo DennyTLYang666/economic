@@ -1,0 +1,369 @@
+{
+ "_說明": "各國總經指標（美國在 pipeline/build.py 的 MACRO）。src：fred＝FRED 序列（要同時列在 symbols.json 的 fred 清單）；ndc＝國發會「景氣指標及燈號」開放資料（col 為欄名關鍵字）；cal＝行事曆（Forex Factory）公布值，每次更新累積成歷史。how：level 直接用數值、yoy 年增、mom 與前一期相比（季資料即季增）、steps 利率的階梯變動。cal＝[行事曆國別, 英文標題的正規表示式]，用來找『下次公布』。good：1＝越高越好、−1＝越低越好、0＝不評好壞（政策利率）。scale＝變動多少算明顯。",
+ "countries": [
+  {
+   "id": "us",
+   "name": "美國"
+  },
+  {
+   "id": "eu",
+   "name": "歐元區"
+  },
+  {
+   "id": "jp",
+   "name": "日本"
+  },
+  {
+   "id": "tw",
+   "name": "台灣"
+  },
+  {
+   "id": "uk",
+   "name": "英國"
+  },
+  {
+   "id": "cn",
+   "name": "中國"
+  }
+ ],
+ "indicators": [
+  {
+   "id": "eu_cpi",
+   "country": "eu",
+   "name": "歐元區 HICP 年增",
+   "src": "fred",
+   "sid": "CP0000EZCCM086NEST",
+   "how": "yoy",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.2,
+   "rec": 1,
+   "cal": [
+    "歐元區",
+    "cpi flash estimate y/y|^cpi y/y"
+   ]
+  },
+  {
+   "id": "eu_unemp",
+   "country": "eu",
+   "name": "歐元區失業率",
+   "src": "cal",
+   "cal": [
+    "歐元區",
+    "^unemployment rate"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.1,
+   "rec": 2
+  },
+  {
+   "id": "eu_gdp",
+   "country": "eu",
+   "name": "歐元區實質 GDP 季增",
+   "src": "fred",
+   "sid": "CLVMNACSCAB1GQEA",
+   "how": "mom",
+   "unit": "%",
+   "dec": 2,
+   "good": 1,
+   "scale": 0.2,
+   "rec": 3,
+   "cal": [
+    "歐元區",
+    "gdp q/q"
+   ]
+  },
+  {
+   "id": "eu_ecb",
+   "country": "eu",
+   "name": "歐洲央行存款利率",
+   "src": "fred",
+   "sid": "ECBDFR",
+   "how": "steps",
+   "unit": "%",
+   "dec": 2,
+   "good": 0,
+   "scale": 0.25,
+   "rec": 4,
+   "cal": [
+    "歐元區",
+    "main refinancing rate|monetary policy statement"
+   ]
+  },
+  {
+   "id": "jp_cpi",
+   "country": "jp",
+   "name": "日本全國核心 CPI 年增",
+   "src": "cal",
+   "cal": [
+    "日本",
+    "national core cpi y/y"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.2,
+   "rec": 1
+  },
+  {
+   "id": "jp_unemp",
+   "country": "jp",
+   "name": "日本失業率",
+   "src": "fred",
+   "sid": "LRUNTTTTJPM156S",
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.1,
+   "rec": 2,
+   "cal": [
+    "日本",
+    "^unemployment rate"
+   ]
+  },
+  {
+   "id": "jp_gdp",
+   "country": "jp",
+   "name": "日本 GDP 季增",
+   "src": "cal",
+   "cal": [
+    "日本",
+    "gdp q/q"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": 1,
+   "scale": 0.3,
+   "rec": 3
+  },
+  {
+   "id": "jp_boj",
+   "country": "jp",
+   "name": "日銀政策利率",
+   "src": "cal",
+   "cal": [
+    "日本",
+    "boj policy rate"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 2,
+   "good": 0,
+   "scale": 0.25,
+   "rec": 4
+  },
+  {
+   "id": "jp_tankan",
+   "country": "jp",
+   "name": "日銀短觀（大型製造業）",
+   "src": "cal",
+   "cal": [
+    "日本",
+    "tankan manufacturing index"
+   ],
+   "how": "level",
+   "unit": "點",
+   "dec": 0,
+   "good": 1,
+   "scale": 2,
+   "rec": 5
+  },
+  {
+   "id": "tw_signal",
+   "country": "tw",
+   "name": "景氣對策信號（分）",
+   "src": "ndc",
+   "col": "景氣對策信號綜合分數",
+   "how": "level",
+   "unit": "分",
+   "dec": 0,
+   "good": 1,
+   "scale": 3,
+   "rec": 1
+  },
+  {
+   "id": "tw_unemp",
+   "country": "tw",
+   "name": "台灣失業率",
+   "src": "ndc",
+   "col": "失業率",
+   "how": "level",
+   "unit": "%",
+   "dec": 2,
+   "good": -1,
+   "scale": 0.05,
+   "rec": 2
+  },
+  {
+   "id": "tw_ip",
+   "country": "tw",
+   "name": "台灣工業生產指數年增",
+   "src": "ndc",
+   "col": "工業生產指數",
+   "how": "yoy",
+   "unit": "%",
+   "dec": 1,
+   "good": 1,
+   "scale": 2,
+   "rec": 3
+  },
+  {
+   "id": "tw_export",
+   "country": "tw",
+   "name": "台灣出口年增（美元）",
+   "src": "fred",
+   "sid": "VALEXPTWM052N",
+   "how": "yoy",
+   "unit": "%",
+   "dec": 1,
+   "good": 1,
+   "scale": 3,
+   "rec": 4
+  },
+  {
+   "id": "tw_leading",
+   "country": "tw",
+   "name": "景氣領先指標（不含趨勢）",
+   "src": "ndc",
+   "col": "領先指標不含趨勢指數",
+   "how": "level",
+   "unit": "點",
+   "dec": 2,
+   "good": 1,
+   "scale": 0.3,
+   "rec": 5
+  },
+  {
+   "id": "tw_loan",
+   "country": "tw",
+   "name": "五大銀行新放款平均利率",
+   "src": "ndc",
+   "col": "五大銀行新承做放款平均利率",
+   "how": "level",
+   "unit": "%",
+   "dec": 3,
+   "good": 0,
+   "scale": 0.05,
+   "rec": 6
+  },
+  {
+   "id": "uk_cpi",
+   "country": "uk",
+   "name": "英國 CPI 年增",
+   "src": "cal",
+   "cal": [
+    "英國",
+    "^cpi y/y"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.2,
+   "rec": 1
+  },
+  {
+   "id": "uk_unemp",
+   "country": "uk",
+   "name": "英國失業率",
+   "src": "cal",
+   "cal": [
+    "英國",
+    "^unemployment rate"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.1,
+   "rec": 2
+  },
+  {
+   "id": "uk_gdp",
+   "country": "uk",
+   "name": "英國 GDP 月增",
+   "src": "cal",
+   "cal": [
+    "英國",
+    "^gdp m/m"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": 1,
+   "scale": 0.2,
+   "rec": 3
+  },
+  {
+   "id": "uk_boe",
+   "country": "uk",
+   "name": "英國央行利率",
+   "src": "cal",
+   "cal": [
+    "英國",
+    "official bank rate"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 2,
+   "good": 0,
+   "scale": 0.25,
+   "rec": 4
+  },
+  {
+   "id": "cn_cpi",
+   "country": "cn",
+   "name": "中國 CPI 年增",
+   "src": "cal",
+   "cal": [
+    "中國",
+    "^cpi y/y"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": -1,
+   "scale": 0.3,
+   "rec": 1
+  },
+  {
+   "id": "cn_pmi",
+   "country": "cn",
+   "name": "中國官方製造業 PMI",
+   "src": "cal",
+   "cal": [
+    "中國",
+    "official manufacturing pmi"
+   ],
+   "how": "level",
+   "unit": "點",
+   "dec": 1,
+   "good": 1,
+   "scale": 0.5,
+   "rec": 2
+  },
+  {
+   "id": "cn_gdp",
+   "country": "cn",
+   "name": "中國 GDP 年增（季）",
+   "src": "cal",
+   "cal": [
+    "中國",
+    "^gdp q/y"
+   ],
+   "how": "level",
+   "unit": "%",
+   "dec": 1,
+   "good": 1,
+   "scale": 0.3,
+   "rec": 3
+  }
+ ]
+}

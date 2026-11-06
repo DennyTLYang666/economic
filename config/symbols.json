@@ -1,0 +1,1754 @@
+{
+ "_說明": "市場標的清單。id 是內部代號（不要隨意改，歷史資料用它對應）；yahoo 可寫多個候選，依序嘗試。kind：price＝看漲跌幅%，rate＝殖利率，看漲跌幅度 pp。market 決定休市判斷與時區。 q＝新聞搜尋關鍵字；from_fred＝這個標的沒有 Yahoo 報價，改用 FRED 序列；hidden 群組不顯示在概覽，只供基金頁使用。derived＝由兩個標的相減（或相除）算出的序列，可放進趨勢圖。",
+ "groups": [
+  {
+   "id": "us",
+   "name": "美股"
+  },
+  {
+   "id": "ai",
+   "name": "AI 供應鏈"
+  },
+  {
+   "id": "asia",
+   "name": "亞歐股市"
+  },
+  {
+   "id": "twd",
+   "name": "新台幣匯率（每 1 單位外幣兌台幣）"
+  },
+  {
+   "id": "twd_c",
+   "name": "新台幣・加密貨幣（每 1 單位兌台幣；美元報價×美元兌台幣）"
+  },
+  {
+   "id": "fx",
+   "name": "國際匯率"
+  },
+  {
+   "id": "rates",
+   "name": "美債殖利率（短→長）"
+  },
+  {
+   "id": "risk",
+   "name": "市場風險"
+  },
+  {
+   "id": "cmd",
+   "name": "商品"
+  },
+  {
+   "id": "f_dev",
+   "name": "基金類別・成熟市場股票"
+  },
+  {
+   "id": "f_em",
+   "name": "基金類別・新興與亞洲股票"
+  },
+  {
+   "id": "f_theme",
+   "name": "基金類別・產業與主題"
+  },
+  {
+   "id": "f_bond",
+   "name": "基金類別・債券"
+  },
+  {
+   "id": "f_mix",
+   "name": "基金類別・平衡與多重資產"
+  },
+  {
+   "id": "f_cash",
+   "name": "基金類別・貨幣與保守"
+  },
+  {
+   "id": "x_raw",
+   "name": "原始報價（不顯示）",
+   "hidden": true
+  }
+ ],
+ "symbols": [
+  {
+   "id": "dji",
+   "name": "道瓊工業",
+   "short": "道瓊",
+   "group": "us",
+   "yahoo": [
+    "^DJI"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "道瓊工業指數"
+  },
+  {
+   "id": "spx",
+   "name": "標普 500",
+   "short": "標普",
+   "group": "us",
+   "yahoo": [
+    "^GSPC"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "標普500 美股"
+  },
+  {
+   "id": "ixic",
+   "name": "那斯達克綜合",
+   "short": "那指",
+   "group": "us",
+   "yahoo": [
+    "^IXIC"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "那斯達克 美股"
+  },
+  {
+   "id": "sox",
+   "name": "費城半導體",
+   "short": "費半",
+   "group": "us",
+   "yahoo": [
+    "^SOX"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "費城半導體指數"
+  },
+  {
+   "id": "tsm",
+   "name": "台積電 ADR",
+   "short": "台積電ADR",
+   "group": "ai",
+   "yahoo": [
+    "TSM"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "台積電 ADR 美股"
+  },
+  {
+   "id": "nvda",
+   "name": "輝達 NVIDIA",
+   "short": "輝達",
+   "group": "ai",
+   "yahoo": [
+    "NVDA"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "輝達 NVIDIA"
+  },
+  {
+   "id": "amd",
+   "name": "超微 AMD",
+   "short": "AMD",
+   "group": "ai",
+   "yahoo": [
+    "AMD"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "超微 AMD"
+  },
+  {
+   "id": "mu",
+   "name": "美光 Micron",
+   "short": "美光",
+   "group": "ai",
+   "yahoo": [
+    "MU"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美光 Micron"
+  },
+  {
+   "id": "tw2330",
+   "name": "台積電（台股）",
+   "short": "台積電",
+   "group": "ai",
+   "yahoo": [
+    "2330.TW"
+   ],
+   "kind": "price",
+   "dec": 0,
+   "market": "TW",
+   "q": "台積電"
+  },
+  {
+   "id": "twii",
+   "name": "台灣加權指數",
+   "short": "加權",
+   "group": "asia",
+   "yahoo": [
+    "^TWII"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "TW",
+   "q": "台股 加權指數"
+  },
+  {
+   "id": "ks11",
+   "name": "韓國 KOSPI",
+   "short": "KOSPI",
+   "group": "asia",
+   "yahoo": [
+    "^KS11"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "KR",
+   "q": "韓國股市 KOSPI"
+  },
+  {
+   "id": "n225",
+   "name": "日經 225",
+   "short": "日經",
+   "group": "asia",
+   "yahoo": [
+    "^N225"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "JP",
+   "q": "日經指數"
+  },
+  {
+   "id": "hsi",
+   "name": "香港恒生",
+   "short": "恒生",
+   "group": "asia",
+   "yahoo": [
+    "^HSI"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "HK",
+   "q": "恒生指數 港股"
+  },
+  {
+   "id": "sse",
+   "name": "上證指數",
+   "short": "上證",
+   "group": "asia",
+   "yahoo": [
+    "000001.SS"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "CN",
+   "q": "上證指數 陸股"
+  },
+  {
+   "id": "sensex",
+   "name": "印度 SENSEX",
+   "short": "SENSEX",
+   "group": "asia",
+   "yahoo": [
+    "^BSESN"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "IN",
+   "q": "印度股市 SENSEX"
+  },
+  {
+   "id": "dax",
+   "name": "德國 DAX",
+   "short": "DAX",
+   "group": "asia",
+   "yahoo": [
+    "^GDAXI"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "DE",
+   "q": "德國股市 DAX"
+  },
+  {
+   "id": "usdtwd",
+   "name": "美元／新台幣",
+   "short": "美元",
+   "group": "twd",
+   "yahoo": [
+    "TWD=X"
+   ],
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "新台幣 匯率"
+  },
+  {
+   "id": "dxy",
+   "name": "美元指數 DXY",
+   "short": "美元指數",
+   "group": "fx",
+   "yahoo": [
+    "DX-Y.NYB"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "FX",
+   "q": "美元指數"
+  },
+  {
+   "id": "usdjpy",
+   "name": "美元／日圓",
+   "short": "美元日圓",
+   "group": "fx",
+   "yahoo": [
+    "JPY=X"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "FX",
+   "q": "美元日圓 匯率"
+  },
+  {
+   "id": "usdkrw",
+   "name": "美元／韓元",
+   "short": "美元韓元",
+   "group": "fx",
+   "yahoo": [
+    "KRW=X"
+   ],
+   "kind": "price",
+   "dec": 1,
+   "market": "FX",
+   "q": "韓元 匯率"
+  },
+  {
+   "id": "eurusd",
+   "name": "歐元／美元",
+   "short": "歐元美元",
+   "group": "fx",
+   "yahoo": [
+    "EURUSD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "歐元 匯率"
+  },
+  {
+   "id": "audusd",
+   "name": "澳幣／美元",
+   "short": "澳幣",
+   "group": "fx",
+   "yahoo": [
+    "AUDUSD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "澳幣 匯率"
+  },
+  {
+   "id": "gbpusd",
+   "name": "英鎊／美元",
+   "short": "英鎊",
+   "group": "fx",
+   "yahoo": [
+    "GBPUSD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "英鎊 匯率"
+  },
+  {
+   "id": "nzdusd",
+   "name": "紐幣／美元",
+   "short": "紐幣",
+   "group": "fx",
+   "yahoo": [
+    "NZDUSD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "紐西蘭幣 匯率"
+  },
+  {
+   "id": "usdcny",
+   "name": "美元／人民幣",
+   "short": "人民幣",
+   "group": "fx",
+   "yahoo": [
+    "CNY=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "人民幣 匯率"
+  },
+  {
+   "id": "usdzar",
+   "name": "美元／南非幣",
+   "short": "南非幣",
+   "group": "fx",
+   "yahoo": [
+    "ZAR=X"
+   ],
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "南非幣 匯率"
+  },
+  {
+   "id": "usdcad",
+   "name": "美元／加幣",
+   "short": "加幣",
+   "group": "fx",
+   "yahoo": [
+    "CAD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "加幣 匯率"
+  },
+  {
+   "id": "usdchf",
+   "name": "美元／瑞郎",
+   "short": "瑞郎",
+   "group": "fx",
+   "yahoo": [
+    "CHF=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "瑞士法郎 匯率"
+  },
+  {
+   "id": "usdhkd",
+   "name": "美元／港幣",
+   "short": "港幣",
+   "group": "fx",
+   "yahoo": [
+    "HKD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "港幣 匯率"
+  },
+  {
+   "id": "usdsgd",
+   "name": "美元／新加坡幣",
+   "short": "新加坡幣",
+   "group": "fx",
+   "yahoo": [
+    "SGD=X"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "新加坡幣 匯率"
+  },
+  {
+   "id": "us3m",
+   "name": "美國 3 個月期殖利率",
+   "short": "美債3月",
+   "group": "rates",
+   "yahoo": [
+    "^IRX"
+   ],
+   "kind": "rate",
+   "dec": 3,
+   "market": "US",
+   "q": "美國國庫券 短期殖利率"
+  },
+  {
+   "id": "us2y",
+   "name": "美國 2 年期殖利率",
+   "short": "美債2年",
+   "group": "rates",
+   "yahoo": [],
+   "from_fred": "DGS2",
+   "kind": "rate",
+   "dec": 3,
+   "market": "US",
+   "q": "美債2年期殖利率"
+  },
+  {
+   "id": "us5y",
+   "name": "美國 5 年期殖利率",
+   "short": "美債5年",
+   "group": "rates",
+   "yahoo": [
+    "^FVX"
+   ],
+   "kind": "rate",
+   "dec": 3,
+   "market": "US",
+   "q": "美債5年期殖利率"
+  },
+  {
+   "id": "us10y",
+   "name": "美國 10 年期殖利率",
+   "short": "美債10年",
+   "group": "rates",
+   "yahoo": [
+    "^TNX"
+   ],
+   "kind": "rate",
+   "dec": 3,
+   "market": "US",
+   "q": "美債10年期殖利率"
+  },
+  {
+   "id": "us30y",
+   "name": "美國 30 年期殖利率",
+   "short": "美債30年",
+   "group": "rates",
+   "yahoo": [
+    "^TYX"
+   ],
+   "kind": "rate",
+   "dec": 3,
+   "market": "US",
+   "q": "美債30年期殖利率"
+  },
+  {
+   "id": "vix",
+   "name": "VIX 恐慌指數",
+   "short": "VIX",
+   "group": "risk",
+   "yahoo": [
+    "^VIX"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "VIX 恐慌指數"
+  },
+  {
+   "id": "vxn",
+   "name": "那斯達克波動 VXN",
+   "short": "VXN",
+   "group": "risk",
+   "yahoo": [
+    "^VXN"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "VXN 那斯達克 波動率指數"
+  },
+  {
+   "id": "vvix",
+   "name": "VIX 的波動 VVIX",
+   "short": "VVIX",
+   "group": "risk",
+   "yahoo": [
+    "^VVIX"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "VVIX 波動率指數"
+  },
+  {
+   "id": "move",
+   "name": "債市波動 MOVE",
+   "short": "MOVE",
+   "group": "risk",
+   "yahoo": [
+    "^MOVE"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "MOVE 債市波動指數"
+  },
+  {
+   "id": "skew",
+   "name": "尾端風險 SKEW",
+   "short": "SKEW",
+   "group": "risk",
+   "yahoo": [
+    "^SKEW"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "SKEW 指數 尾端風險"
+  },
+  {
+   "id": "ovx",
+   "name": "原油波動 OVX",
+   "short": "OVX",
+   "group": "risk",
+   "yahoo": [
+    "^OVX"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "OVX 原油波動指數"
+  },
+  {
+   "id": "gvz",
+   "name": "黃金波動 GVZ",
+   "short": "GVZ",
+   "group": "risk",
+   "yahoo": [
+    "^GVZ"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "GVZ 黃金波動指數"
+  },
+  {
+   "id": "hyoas",
+   "name": "高收益債信用利差 HY OAS",
+   "short": "信用利差",
+   "group": "risk",
+   "yahoo": [],
+   "from_fred": "BAMLH0A0HYM2",
+   "kind": "rate",
+   "dec": 2,
+   "market": "US",
+   "q": "高收益債 信用利差"
+  },
+  {
+   "id": "xauusd",
+   "name": "黃金（美元／盎司）",
+   "short": "黃金",
+   "group": "cmd",
+   "yahoo": [
+    "XAUUSD=X",
+    "GC=F"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "CMD",
+   "q": "黃金 金價"
+  },
+  {
+   "id": "silver",
+   "name": "白銀（美元／盎司）",
+   "short": "白銀",
+   "group": "cmd",
+   "yahoo": [
+    "XAGUSD=X",
+    "SI=F"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "CMD",
+   "q": "白銀 銀價"
+  },
+  {
+   "id": "brent",
+   "name": "布蘭特原油",
+   "short": "布蘭特",
+   "group": "cmd",
+   "yahoo": [
+    "BZ=F"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "CMD",
+   "q": "布蘭特原油 油價"
+  },
+  {
+   "id": "wti",
+   "name": "WTI 原油",
+   "short": "WTI",
+   "group": "cmd",
+   "yahoo": [
+    "CL=F"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "CMD",
+   "q": "WTI原油 油價"
+  },
+  {
+   "id": "spy",
+   "name": "美國大型股 SPY",
+   "short": "SPY",
+   "group": "f_dev",
+   "yahoo": [
+    "SPY"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美國大型股 SPY"
+  },
+  {
+   "id": "eem",
+   "name": "新興市場 EEM",
+   "short": "EEM",
+   "group": "f_em",
+   "yahoo": [
+    "EEM"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "新興市場 EEM"
+  },
+  {
+   "id": "ilf",
+   "name": "拉丁美洲 ILF",
+   "short": "ILF",
+   "group": "f_em",
+   "yahoo": [
+    "ILF"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "拉丁美洲 ILF"
+  },
+  {
+   "id": "inda",
+   "name": "印度 INDA",
+   "short": "INDA",
+   "group": "f_em",
+   "yahoo": [
+    "INDA"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "印度 INDA"
+  },
+  {
+   "id": "mchi",
+   "name": "中國 MCHI",
+   "short": "MCHI",
+   "group": "f_em",
+   "yahoo": [
+    "MCHI"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "中國 MCHI"
+  },
+  {
+   "id": "vnm",
+   "name": "越南 VNM",
+   "short": "VNM",
+   "group": "f_em",
+   "yahoo": [
+    "VNM"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "越南 VNM"
+  },
+  {
+   "id": "asea",
+   "name": "東協 ASEA",
+   "short": "ASEA",
+   "group": "f_em",
+   "yahoo": [
+    "ASEA"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "東協 ASEA"
+  },
+  {
+   "id": "ewj",
+   "name": "日本 EWJ",
+   "short": "EWJ",
+   "group": "f_dev",
+   "yahoo": [
+    "EWJ"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "日本 EWJ"
+  },
+  {
+   "id": "vgk",
+   "name": "歐洲 VGK",
+   "short": "VGK",
+   "group": "f_dev",
+   "yahoo": [
+    "VGK"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "歐洲 VGK"
+  },
+  {
+   "id": "ewt",
+   "name": "台灣 EWT",
+   "short": "EWT",
+   "group": "f_dev",
+   "yahoo": [
+    "EWT"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "台灣 EWT"
+  },
+  {
+   "id": "acwi",
+   "name": "全球股票 ACWI",
+   "short": "ACWI",
+   "group": "f_dev",
+   "yahoo": [
+    "ACWI"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "全球股票 ACWI"
+  },
+  {
+   "id": "aaxj",
+   "name": "亞洲不含日本 AAXJ",
+   "short": "AAXJ",
+   "group": "f_em",
+   "yahoo": [
+    "AAXJ"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "亞洲不含日本 AAXJ"
+  },
+  {
+   "id": "xlk",
+   "name": "美國科技 XLK",
+   "short": "XLK",
+   "group": "f_theme",
+   "yahoo": [
+    "XLK"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美國科技 XLK"
+  },
+  {
+   "id": "xlv",
+   "name": "美國醫療保健 XLV",
+   "short": "XLV",
+   "group": "f_theme",
+   "yahoo": [
+    "XLV"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美國醫療保健 XLV"
+  },
+  {
+   "id": "xle",
+   "name": "美國能源 XLE",
+   "short": "XLE",
+   "group": "f_theme",
+   "yahoo": [
+    "XLE"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美國能源 XLE"
+  },
+  {
+   "id": "gdx",
+   "name": "金礦股 GDX",
+   "short": "GDX",
+   "group": "f_theme",
+   "yahoo": [
+    "GDX"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "金礦股 GDX"
+  },
+  {
+   "id": "gnr",
+   "name": "天然資源 GNR",
+   "short": "GNR",
+   "group": "f_theme",
+   "yahoo": [
+    "GNR"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "天然資源 GNR"
+  },
+  {
+   "id": "vnq",
+   "name": "美國不動產 VNQ",
+   "short": "VNQ",
+   "group": "f_theme",
+   "yahoo": [
+    "VNQ"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美國不動產 VNQ"
+  },
+  {
+   "id": "hyg",
+   "name": "高收益債 HYG",
+   "short": "HYG",
+   "group": "f_bond",
+   "yahoo": [
+    "HYG"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "高收益債 HYG"
+  },
+  {
+   "id": "emb",
+   "name": "新興市場債 EMB",
+   "short": "EMB",
+   "group": "f_bond",
+   "yahoo": [
+    "EMB"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "新興市場債 EMB"
+  },
+  {
+   "id": "lqd",
+   "name": "投資等級公司債 LQD",
+   "short": "LQD",
+   "group": "f_bond",
+   "yahoo": [
+    "LQD"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "投資等級公司債 LQD"
+  },
+  {
+   "id": "cwb",
+   "name": "可轉換債 CWB",
+   "short": "CWB",
+   "group": "f_bond",
+   "yahoo": [
+    "CWB"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "可轉換債 CWB"
+  },
+  {
+   "id": "bil",
+   "name": "1-3個月美國國庫券 BIL",
+   "short": "BIL",
+   "group": "f_cash",
+   "yahoo": [
+    "BIL"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "1-3個月美國國庫券 BIL"
+  },
+  {
+   "id": "aor",
+   "name": "全球多重資產 AOR",
+   "short": "AOR",
+   "group": "f_mix",
+   "yahoo": [
+    "AOR"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "全球多重資產 AOR"
+  },
+  {
+   "id": "vt",
+   "name": "全球股票 VT",
+   "short": "VT",
+   "group": "f_theme",
+   "yahoo": [
+    "VT"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "全球股票 VT"
+  },
+  {
+   "id": "ief",
+   "name": "美債 7-10年 IEF",
+   "short": "IEF",
+   "group": "f_bond",
+   "yahoo": [
+    "IEF"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "US",
+   "q": "美債 7-10年 IEF"
+  },
+  {
+   "id": "usdt_usd",
+   "name": "USDT／美元",
+   "short": "USDT",
+   "group": "x_raw",
+   "yahoo": [
+    "USDT-USD"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "CRYPTO",
+   "q": "泰達幣 USDT 價格"
+  },
+  {
+   "id": "usdc_usd",
+   "name": "USDC／美元",
+   "short": "USDC",
+   "group": "x_raw",
+   "yahoo": [
+    "USDC-USD"
+   ],
+   "kind": "price",
+   "dec": 4,
+   "market": "CRYPTO",
+   "q": "USDC 穩定幣 價格"
+  },
+  {
+   "id": "btc_usd",
+   "name": "比特幣／美元",
+   "short": "BTC",
+   "group": "x_raw",
+   "yahoo": [
+    "BTC-USD"
+   ],
+   "kind": "price",
+   "dec": 0,
+   "market": "CRYPTO",
+   "q": "比特幣 價格"
+  },
+  {
+   "id": "eth_usd",
+   "name": "以太幣／美元",
+   "short": "ETH",
+   "group": "x_raw",
+   "yahoo": [
+    "ETH-USD"
+   ],
+   "kind": "price",
+   "dec": 1,
+   "market": "CRYPTO",
+   "q": "以太幣 價格"
+  },
+  {
+   "id": "sol_usd",
+   "name": "SOL／美元",
+   "short": "SOL",
+   "group": "x_raw",
+   "yahoo": [
+    "SOL-USD"
+   ],
+   "kind": "price",
+   "dec": 2,
+   "market": "CRYPTO",
+   "q": "Solana SOL 價格"
+  }
+ ],
+ "fred": [
+  {
+   "id": "DTWEXBGS",
+   "name": "美元指數（廣義）",
+   "role": "美元強弱",
+   "change": "pct",
+   "light": true
+  },
+  {
+   "id": "DFII10",
+   "name": "10 年實質殖利率",
+   "role": "持有無息資產的機會成本",
+   "change": "diff",
+   "light": true
+  },
+  {
+   "id": "DGS2",
+   "name": "2 年美債殖利率",
+   "role": "近端利率預期",
+   "change": "diff",
+   "light": true
+  },
+  {
+   "id": "T10YIE",
+   "name": "10 年預期通膨",
+   "role": "市場定價的通膨預期",
+   "change": "diff",
+   "light": true
+  },
+  {
+   "id": "VIXCLS",
+   "name": "VIX（FRED）",
+   "role": "避險情緒",
+   "change": "pct",
+   "light": true
+  },
+  {
+   "id": "CPIAUCNS",
+   "name": "美國 CPI（未季調）"
+  },
+  {
+   "id": "CPILFENS",
+   "name": "美國核心 CPI（未季調）"
+  },
+  {
+   "id": "PPIFID",
+   "name": "美國 PPI 最終需求（未季調）"
+  },
+  {
+   "id": "PCEPI",
+   "name": "美國 PCE 物價指數"
+  },
+  {
+   "id": "PAYEMS",
+   "name": "美國非農就業（千人）"
+  },
+  {
+   "id": "UNRATE",
+   "name": "美國失業率"
+  },
+  {
+   "id": "DFEDTARU",
+   "name": "聯邦資金利率目標上限"
+  },
+  {
+   "id": "BAMLH0A0HYM2",
+   "name": "高收益債信用利差（OAS）"
+  },
+  {
+   "id": "PCEPILFE",
+   "name": "美國核心 PCE 物價指數"
+  },
+  {
+   "id": "ICSA",
+   "name": "初領失業救濟金（人）"
+  },
+  {
+   "id": "RSAFS",
+   "name": "美國零售銷售（百萬美元）"
+  },
+  {
+   "id": "INDPRO",
+   "name": "美國工業生產指數"
+  },
+  {
+   "id": "A191RL1Q225SBEA",
+   "name": "美國實質 GDP 年化季增率"
+  },
+  {
+   "id": "UMCSENT",
+   "name": "密大消費者信心指數"
+  },
+  {
+   "id": "HOUST",
+   "name": "美國新屋開工（千戶）"
+  },
+  {
+   "id": "JTSJOL",
+   "name": "美國職缺數 JOLTS（千個）"
+  },
+  {
+   "id": "CP0000EZCCM086NEST",
+   "name": "歐元區 HICP（指數）"
+  },
+  {
+   "id": "CLVMNACSCAB1GQEA",
+   "name": "歐元區實質 GDP（季）"
+  },
+  {
+   "id": "ECBDFR",
+   "name": "歐洲央行存款利率"
+  },
+  {
+   "id": "LRUNTTTTJPM156S",
+   "name": "日本失業率"
+  },
+  {
+   "id": "VALEXPTWM052N",
+   "name": "台灣出口值（百萬美元）"
+  }
+ ],
+ "lights": [
+  {
+   "id": "twii",
+   "name": "台股加權"
+  },
+  {
+   "id": "spx",
+   "name": "標普 500"
+  },
+  {
+   "id": "ixic",
+   "name": "那斯達克"
+  },
+  {
+   "id": "xauusd",
+   "name": "黃金"
+  },
+  {
+   "id": "brent",
+   "name": "布蘭特原油"
+  },
+  {
+   "id": "usdtwd",
+   "name": "美元／新台幣"
+  }
+ ],
+ "charts": [
+  {
+   "id": "tw_vs_us",
+   "cat": "stocks",
+   "title": "台股對美股與費半",
+   "note": "起點設為 100，看相對強弱",
+   "mode": "index",
+   "series": [
+    "twii",
+    "ixic",
+    "sox"
+   ]
+  },
+  {
+   "id": "ai_chain",
+   "cat": "stocks",
+   "title": "AI 供應鏈",
+   "note": "起點設為 100",
+   "mode": "index",
+   "series": [
+    "tsm",
+    "nvda",
+    "amd",
+    "mu",
+    "tw2330"
+   ]
+  },
+  {
+   "id": "asia",
+   "cat": "stocks",
+   "title": "亞洲股市",
+   "note": "起點設為 100",
+   "mode": "index",
+   "series": [
+    "twii",
+    "ks11",
+    "n225",
+    "hsi",
+    "sse",
+    "sensex"
+   ]
+  },
+  {
+   "id": "usdtwd",
+   "cat": "fx",
+   "title": "美元兌新台幣",
+   "note": "越高代表台幣越貶",
+   "mode": "level",
+   "series": [
+    "usdtwd"
+   ]
+  },
+  {
+   "id": "twd_cross",
+   "cat": "fx",
+   "title": "新台幣兌各幣別",
+   "note": "起點設為 100；上升＝該外幣變貴（台幣相對貶值）",
+   "mode": "index",
+   "series": [
+    "twd_eur",
+    "twd_jpy",
+    "twd_cny",
+    "twd_aud",
+    "twd_gbp",
+    "twd_zar",
+    "twd_hkd",
+    "twd_krw"
+   ]
+  },
+  {
+   "id": "twd_stable",
+   "cat": "fx",
+   "title": "穩定幣兌新台幣（USDT／USDC 對照美元）",
+   "note": "單位：新台幣；與美元／新台幣的差距＝穩定幣偏離 1 美元的程度（未含台灣交易所價差）",
+   "mode": "level",
+   "series": [
+    "usdtwd",
+    "twd_usdt",
+    "twd_usdc"
+   ]
+  },
+  {
+   "id": "twd_crypto",
+   "cat": "fx",
+   "title": "加密貨幣（新台幣計價）",
+   "note": "起點設為 100；美元報價×美元／新台幣",
+   "mode": "index",
+   "series": [
+    "twd_btc",
+    "twd_eth",
+    "twd_sol",
+    "twd_usdt"
+   ]
+  },
+  {
+   "id": "fx",
+   "cat": "fx",
+   "title": "美元對各國貨幣",
+   "note": "起點設為 100，上升＝美元走強",
+   "mode": "index",
+   "series": [
+    "dxy",
+    "usdjpy",
+    "usdkrw",
+    "usdtwd",
+    "eurusd"
+   ]
+  },
+  {
+   "id": "fx_usd_base",
+   "cat": "fx",
+   "title": "美元兌其他貨幣",
+   "note": "起點設為 100；上升＝美元走強",
+   "mode": "index",
+   "series": [
+    "usdcny",
+    "usdzar",
+    "usdcad",
+    "usdchf",
+    "usdhkd",
+    "usdsgd"
+   ]
+  },
+  {
+   "id": "fx_usd_quote",
+   "cat": "fx",
+   "title": "各貨幣兌美元（澳、英、紐、歐）",
+   "note": "起點設為 100；上升＝該貨幣走強",
+   "mode": "index",
+   "series": [
+    "audusd",
+    "gbpusd",
+    "nzdusd",
+    "eurusd"
+   ]
+  },
+  {
+   "id": "yields",
+   "cat": "rates",
+   "title": "美債殖利率（短中長天期）",
+   "note": "單位 %",
+   "mode": "level",
+   "series": [
+    "us3m",
+    "us2y",
+    "us5y",
+    "us10y",
+    "us30y"
+   ]
+  },
+  {
+   "id": "spreads",
+   "cat": "rates",
+   "title": "殖利率利差",
+   "note": "單位 pp；低於 0 代表短天期殖利率高於長天期（倒掛）",
+   "mode": "level",
+   "series": [
+    "sp_10_2",
+    "sp_10_3m"
+   ]
+  },
+  {
+   "id": "vix",
+   "cat": "risk",
+   "title": "波動指數水位",
+   "note": "VIX 20 以上偏緊張、30 以上恐慌；其他是各市場的同類指數",
+   "mode": "level",
+   "series": [
+    "vix",
+    "vxn",
+    "ovx",
+    "gvz"
+   ]
+  },
+  {
+   "id": "risk_rel",
+   "cat": "risk",
+   "title": "各類波動指數相對變化",
+   "note": "起點設為 100，看誰的恐慌升得最快",
+   "mode": "index",
+   "series": [
+    "vix",
+    "vxn",
+    "ovx",
+    "gvz",
+    "move",
+    "vvix"
+   ]
+  },
+  {
+   "id": "risk_credit",
+   "cat": "risk",
+   "title": "高收益債信用利差",
+   "note": "越高代表市場越擔心企業違約（單位 %）",
+   "mode": "level",
+   "series": [
+    "hyoas"
+   ]
+  },
+  {
+   "id": "risk_skew",
+   "cat": "risk",
+   "title": "SKEW 尾端風險指數",
+   "note": "越高代表市場越在買崩盤保護（一般 120–150）",
+   "mode": "level",
+   "series": [
+    "skew"
+   ]
+  },
+  {
+   "id": "cmd",
+   "cat": "cmd",
+   "title": "貴金屬與原油",
+   "note": "起點設為 100",
+   "mode": "index",
+   "series": [
+    "xauusd",
+    "silver",
+    "brent",
+    "wti"
+   ]
+  },
+  {
+   "id": "gs_ratio",
+   "cat": "cmd",
+   "title": "金銀比",
+   "note": "黃金價格 ÷ 白銀價格，數字越高代表白銀相對越便宜",
+   "mode": "level",
+   "series": [
+    "gs_ratio"
+   ]
+  }
+ ],
+ "derived": [
+  {
+   "id": "sp_10_2",
+   "name": "10 年減 2 年利差",
+   "short": "10Y−2Y",
+   "a": "us10y",
+   "b": "us2y"
+  },
+  {
+   "id": "sp_10_3m",
+   "name": "10 年減 3 個月利差",
+   "short": "10Y−3M",
+   "a": "us10y",
+   "b": "us3m"
+  },
+  {
+   "id": "gs_ratio",
+   "name": "金銀比（黃金÷白銀）",
+   "short": "金銀比",
+   "a": "xauusd",
+   "b": "silver",
+   "op": "div"
+  },
+  {
+   "id": "twd_eur",
+   "name": "歐元／新台幣",
+   "short": "歐元",
+   "a": "eurusd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "歐元 新台幣 匯率"
+  },
+  {
+   "id": "twd_jpy",
+   "name": "日圓／新台幣",
+   "short": "日圓",
+   "a": "usdtwd",
+   "b": "usdjpy",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 4,
+   "market": "FX",
+   "q": "日圓 新台幣 匯率"
+  },
+  {
+   "id": "twd_cny",
+   "name": "人民幣／新台幣",
+   "short": "人民幣",
+   "a": "usdtwd",
+   "b": "usdcny",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "人民幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_aud",
+   "name": "澳幣／新台幣",
+   "short": "澳幣",
+   "a": "audusd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "澳幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_gbp",
+   "name": "英鎊／新台幣",
+   "short": "英鎊",
+   "a": "gbpusd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "英鎊 新台幣 匯率"
+  },
+  {
+   "id": "twd_zar",
+   "name": "南非幣／新台幣",
+   "short": "南非幣",
+   "a": "usdtwd",
+   "b": "usdzar",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "南非幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_nzd",
+   "name": "紐幣／新台幣",
+   "short": "紐幣",
+   "a": "nzdusd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "紐西蘭幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_cad",
+   "name": "加幣／新台幣",
+   "short": "加幣",
+   "a": "usdtwd",
+   "b": "usdcad",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "加幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_chf",
+   "name": "瑞郎／新台幣",
+   "short": "瑞郎",
+   "a": "usdtwd",
+   "b": "usdchf",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "瑞士法郎 新台幣 匯率"
+  },
+  {
+   "id": "twd_hkd",
+   "name": "港幣／新台幣",
+   "short": "港幣",
+   "a": "usdtwd",
+   "b": "usdhkd",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "港幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_sgd",
+   "name": "新加坡幣／新台幣",
+   "short": "新加坡幣",
+   "a": "usdtwd",
+   "b": "usdsgd",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 3,
+   "market": "FX",
+   "q": "新加坡幣 新台幣 匯率"
+  },
+  {
+   "id": "twd_krw",
+   "name": "韓元／新台幣",
+   "short": "韓元",
+   "a": "usdtwd",
+   "b": "usdkrw",
+   "op": "div",
+   "scale": 1,
+   "group": "twd",
+   "kind": "price",
+   "dec": 5,
+   "market": "FX",
+   "q": "韓元 新台幣 匯率"
+  },
+  {
+   "id": "twd_usdt",
+   "name": "USDT／新台幣",
+   "short": "USDT",
+   "a": "usdt_usd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd_c",
+   "kind": "price",
+   "dec": 3,
+   "market": "CRYPTO",
+   "q": "USDT 新台幣 價格"
+  },
+  {
+   "id": "twd_usdc",
+   "name": "USDC／新台幣",
+   "short": "USDC",
+   "a": "usdc_usd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd_c",
+   "kind": "price",
+   "dec": 3,
+   "market": "CRYPTO",
+   "q": "USDC 新台幣 價格"
+  },
+  {
+   "id": "twd_btc",
+   "name": "比特幣／新台幣",
+   "short": "比特幣",
+   "a": "btc_usd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd_c",
+   "kind": "price",
+   "dec": 0,
+   "market": "CRYPTO",
+   "q": "比特幣 價格 新台幣"
+  },
+  {
+   "id": "twd_eth",
+   "name": "以太幣／新台幣",
+   "short": "以太幣",
+   "a": "eth_usd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd_c",
+   "kind": "price",
+   "dec": 0,
+   "market": "CRYPTO",
+   "q": "以太幣 價格 新台幣"
+  },
+  {
+   "id": "twd_sol",
+   "name": "SOL／新台幣",
+   "short": "SOL",
+   "a": "sol_usd",
+   "b": "usdtwd",
+   "op": "mul",
+   "scale": 1,
+   "group": "twd_c",
+   "kind": "price",
+   "dec": 1,
+   "market": "CRYPTO",
+   "q": "Solana SOL 價格"
+  }
+ ],
+ "curve": {
+  "title": "美債殖利率曲線",
+  "note": "橫軸由短到長；曲線往上翹＝正常，短天期高於長天期＝倒掛",
+  "points": [
+   [
+    "us3m",
+    "3 月"
+   ],
+   [
+    "us2y",
+    "2 年"
+   ],
+   [
+    "us5y",
+    "5 年"
+   ],
+   [
+    "us10y",
+    "10 年"
+   ],
+   [
+    "us30y",
+    "30 年"
+   ]
+  ]
+ }
+}

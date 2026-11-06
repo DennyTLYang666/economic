@@ -1,0 +1,78 @@
+name: 更新市場資料
+
+on:
+  schedule:
+    # 台灣時間 = UTC+8；GitHub 排程為盡力而為，可能延遲數分鐘
+    - cron: "20 22 * * 1-5"   # 06:20 美股收盤後（日更，寫入歷史）
+    - cron: "10 6 * * 1-5"    # 14:10 台股收盤後（日更）
+    - cron: "10 8 * * 1-5"    # 16:10 歐股開盤後（日更）
+    - cron: "30 1-5 * * 1-5"  # 09:30–13:30 台股盤中（快照）
+    - cron: "30 14 * * 1-5"   # 22:30 美股盤中（快照）
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "daily＝寫入歷史；snapshot＝只更新最新價"
+        type: choice
+        default: daily
+        options: [daily, snapshot]
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: eco-data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 決定模式
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 1-5 * * 1-5" ] || [ "${{ github.event.schedule }}" = "30 14 * * 1-5" ]; then
+            echo "mode=snapshot" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 抓資料並產生網站資料
+        run: |
+          set +e
+          python -m pipeline.run --mode "${{ steps.mode.outputs.mode }}"
+          code=$?
+          echo "exit code: $code"
+          # 0 = 成功；2 = 部分來源失敗（仍可推送，網頁會標示）；其他 = 全面失敗，不推送
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then exit "$code"; fi
+          if [ "$code" -eq 2 ]; then echo "::warning::部分資料來源失敗，詳見 data/site/meta.json"; fi
+
+      - name: 推回 main
+        run: |
+          git config user.name "eco-bot"
+          git config user.email "eco-bot@users.noreply.github.com"
+          git add data/series data/site
+          if git diff --cached --quiet; then
+            echo "資料無變動"
+            exit 0
+          fi
+          git commit -m "data: ${{ steps.mode.outputs.mode }} $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "推送失敗，重試 $i"; sleep 5
+          done
+          exit 1
+
+      - name: 通知 Pages 重建（Deploy from a branch 才需要；失敗不影響結果）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" >/dev/null && echo "已要求 Pages 重建" || echo "::notice::略過 Pages 重建通知（Pages 會在 push 後自行建置）"
