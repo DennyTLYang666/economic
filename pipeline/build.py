@@ -479,7 +479,7 @@ def build_all(cfg, daily, fred, auto_events, manual_events, status, today, ccfg=
         common = max(cnt, key=lambda d: (cnt[d], d))  # 次數相同時取較新的日期
         for t in tiles:
             t["show_date"] = t["date"] != common
-        groups.append({"id": g["id"], "name": g["name"], "tiles": tiles})
+        groups.append({"id": g["id"], "name": g["name"], "tiles": tiles, "sort": g.get("sort") or "perf"})  # sort：該組預設排序（perf＝依績效，def＝依預設順序）
     update_cal_series(fred, calendar, intl)  # 行事曆公布值累積進 fred（隨 fred.csv 一起保存）
     macro = build_macro(fred, calendar, today, intl)
     upcoming = [e for e in calendar if today.isoformat() <= e["date"] <= (today + timedelta(days=7)).isoformat() and e["importance"] == "H" and e["main"]]
