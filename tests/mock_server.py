@@ -160,6 +160,16 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(n).decode("utf-8") if n else ""
+        if self.path.split("?")[0] == "/ai":
+            if os.environ.get("MOCK_AI_FAIL") == "1" or self.headers.get("x-api-key") != "test-key":
+                return self._send(401, "{}")
+            H.last_ai_prompt = body
+            return self._send(200, json.dumps({"content": [{"type": "text", "text": '[{"i":0,"s":"美股單日重挫，道瓊跌逾千點。"},{"i":1,"s":"新台幣走貶，美元兌台幣升破 32。"}]'}]}))
+        self._send(404, "{}")
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(u.query)
@@ -196,7 +206,16 @@ class H(BaseHTTPRequestHandler):
             if os.environ.get("MOCK_NEWS_FAIL") == "1":
                 return self._send(503, "down")
             qq = (q.get("q") or [""])[0]
-            items = "".join("<item><title>%s 新聞%d - 測試報</title><link>https://news.example/%d</link><pubDate>Fri, 06 Nov 2026 08:%02d:00 GMT</pubDate><source url=\"https://x\">測試報</source></item>" % (qq.split(" when")[0], i, i, i) for i in range(1, 5))
+            from email.utils import format_datetime
+            from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+            when = lambda i: format_datetime(_dt.now(_tz.utc) - _td(hours=i))
+            base = qq.split(" when")[0]
+            items = "".join("<item><title>%s 新聞%d - 測試報</title><link>https://news.example/%s/%d</link><pubDate>%s</pubDate><source url=\"https://x\">測試報</source></item>" % (base, i, abs(hash(base)) % 99999, i, when(i)) for i in range(1, 5))
+            if os.environ.get("MOCK_NEWS_BIG") == "1":  # 新聞頁測試：同一事件多家報導＋一般新聞
+                items += ("<item><title>美股大跌 道瓊重挫千點 - 中央社</title><link>https://cna.example/1</link><pubDate>%s</pubDate><source url=\"https://c\">中央社</source></item>" % when(2) +
+                          "<item><title>美股重挫 道瓊暴跌千點 恐慌升溫 - 經濟日報</title><link>https://udn.example/1</link><pubDate>%s</pubDate><source url=\"https://u\">經濟日報</source></item>" % when(3) +
+                          "<item><title>美股收盤 道瓊大跌 費半崩 - 自由時報</title><link>https://ltn.example/1</link><pubDate>%s</pubDate><source url=\"https://l\">自由時報</source></item>" % when(4) +
+                          "<item><title>新台幣貶值 美元匯率升破32 - 鉅亨網</title><link>https://cnyes.example/1</link><pubDate>%s</pubDate><source url=\"https://n\">鉅亨網</source></item>" % when(5))
             return self._send(200, '<?xml version="1.0" encoding="UTF-8"?><rss><channel>%s</channel></rss>' % items, "application/rss+xml")
         if u.path == "/ndc/meta":
             if os.environ.get("MOCK_NDC_FAIL") == "1":
@@ -219,7 +238,7 @@ def start(port=0):
 def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
-            "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news",
+            "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_AI": base + "/ai",
             "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 

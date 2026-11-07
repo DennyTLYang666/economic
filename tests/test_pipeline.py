@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mock_server  # noqa: E402
-from pipeline import build, fetch, run  # noqa: E402
+from pipeline import build, fetch, newsfeed, run  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -33,7 +33,7 @@ class Base(unittest.TestCase):
         self._saved = dict(os.environ)
         os.environ.update(self.env)
         os.environ["ECO_BACKOFF"] = "0"
-        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP"):
+        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP", "MOCK_NEWS_BIG", "MOCK_AI_FAIL", "ANTHROPIC_API_KEY"):
             os.environ.pop(k, None)
 
     def tearDown(self):
@@ -481,3 +481,104 @@ class TestEventsUnits(unittest.TestCase):
                 add_event.main(["--root", str(tmp), "--date", "2026-13-01", "--event", "x"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestNewsFeed(Base):
+    def cfg(self):
+        return newsfeed.load_cfg(REPO / "config" / "news_topics.json")
+
+    def test_run_produces_feed(self):
+        os.environ["MOCK_NEWS_BIG"] = "1"
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        d = self.doc("newsfeed")
+        self.assertEqual([t["id"] for t in d["topics"]][:2], ["fx", "mkt"])
+        self.assertFalse(d["ai"])
+        its = d["items"]
+        self.assertGreater(len(its), 20)
+        crash = [i for i in its if "道瓊" in i["t"] and "千點" in i["t"]]
+        self.assertEqual(len(crash), 1, "同一事件的兩家報導要合併成一則")
+        c = crash[0]
+        self.assertGreaterEqual(c["n"], 2)
+        self.assertEqual(len(c["also"]), 1)
+        self.assertIn("mkt", c["tg"])
+        self.assertTrue(c["hot"])
+        fx = [i for i in its if "新台幣貶值" in i["t"]][0]
+        self.assertIn("fx", fx["tg"])
+        self.assertEqual(self.doc("meta")["sources"]["newsfeed"]["ok"], True)
+
+    def test_retention_and_accumulate(self):
+        from datetime import datetime, timedelta
+        cfg, now = self.cfg(), datetime.now(newsfeed.TZ)
+        old = [{"id": "a", "t": "三十五天前的舊新聞內容很長很長", "u": "https://o/1", "s": "甲", "d": (now - timedelta(days=35)).isoformat(timespec="minutes"), "tg": ["mkt"]},
+               {"id": "b", "t": "十天前的新聞保留下來的內容", "u": "https://o/2", "s": "乙", "d": (now - timedelta(days=10)).isoformat(timespec="minutes"), "tg": ["re"]}]
+        raw = [({"t": "全新的一則房市新聞標題在這裡", "u": "https://n/1", "s": "丙", "d": now.isoformat(timespec="minutes"), "sum": ""}, "re")]
+        out = newsfeed.merge(old, raw, now, cfg)
+        self.assertEqual({i["id"] for i in out} - {"b"} != set(), True)
+        self.assertNotIn("a", [i["id"] for i in out])
+        self.assertIn("b", [i["id"] for i in out])
+        self.assertEqual(out[0]["tg"], ["re"])
+        # 再抓一次同樣的：不重複
+        again = newsfeed.merge(out, raw, now, cfg)
+        self.assertEqual(len(again), len(out))
+
+    def test_cluster_swaps_to_better_source(self):
+        from datetime import datetime
+        cfg, now = self.cfg(), datetime.now(newsfeed.TZ)
+        d = now.isoformat(timespec="minutes")
+        raw = [({"t": "央行宣布升息一碼 房貸族衝擊", "u": "https://x/1", "s": "小報", "d": d, "sum": ""}, "macro"),
+               ({"t": "央行宣布升息一碼 衝擊房貸族", "u": "https://x/2", "s": "中央社", "d": d, "sum": ""}, "re")]
+        out = newsfeed.merge([], raw, now, cfg)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["s"], "中央社")            # 權重較高的來源當代表
+        self.assertEqual(out[0]["also"][0]["s"], "小報")
+        self.assertEqual(set(out[0]["tg"]) >= {"macro", "re"}, True)
+
+    def test_same_event_rules(self):
+        se = lambda a, b: newsfeed.same_event(newsfeed.bigrams(newsfeed.norm(a)), a, newsfeed.bigrams(newsfeed.norm(b)), b)
+        self.assertTrue(se("新台幣貶值 美元匯率升破32", "新台幣重貶 美元兌台幣升破32 創近半年新高"))
+        self.assertFalse(se("台股收盤 加權指數上漲50點", "台股收盤 加權指數下跌30點"))  # 數字不同＝不同事件
+        self.assertFalse(se("房市交易量萎縮 預售屋成交價創高", "央行信用管制 房貸利率調升"))
+
+    def test_summary_filter_and_trim(self):
+        self.assertEqual(newsfeed.good_summary("<a href=x>美股大跌 道瓊重挫</a>&nbsp;中央社", "美股大跌 道瓊重挫"), "")
+        s = newsfeed.good_summary("<p>聯準會昨晚宣布維持利率不變，並暗示年底前仍有一次降息空間。市場解讀偏鴿。</p>", "Fed 決議")
+        self.assertTrue(s.startswith("聯準會昨晚宣布維持利率不變"))
+        self.assertLessEqual(len(newsfeed.trim("甲" * 200)), 71)
+
+    def test_hot_cap_per_topic_day(self):
+        from datetime import datetime
+        cfg, now = self.cfg(), datetime.now(newsfeed.TZ)
+        d = now.isoformat(timespec="minutes")
+        cfg["hot"]["threshold"] = 2
+        heads = ["台積電重挫逾百元 外資連賣", "聯發科崩跌 法人下修目標價", "鴻海大跌 伺服器出貨遞延", "廣達暴跌 AI訂單恐縮手", "緯創重挫 美國客戶砍單", "大立光崩 手機鏡頭需求疲軟"]
+        raw = [({"t": h, "u": "https://h/%d" % i, "s": "中央社", "d": d, "sum": ""}, "mkt") for i, h in enumerate(heads)]
+        out = newsfeed.merge([], raw, now, cfg)
+        self.assertEqual(sum(1 for i in out if i["hot"]), cfg["hot"]["per_topic_day"])
+
+    def test_ai_summary_optional(self):
+        os.environ["MOCK_NEWS_BIG"] = "1"
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        d = self.doc("newsfeed")
+        self.assertTrue(d["ai"])
+        got = [i for i in d["items"] if i.get("ai")]
+        self.assertGreaterEqual(len(got), 1)
+        self.assertLessEqual(len(got[0]["sum"]), 75)
+        self.assertIn("只能根據提供的標題", json.loads(mock_server.H.last_ai_prompt)["messages"][0]["content"])
+
+    def test_ai_failure_is_soft(self):
+        os.environ["MOCK_NEWS_BIG"] = "1"
+        os.environ["ANTHROPIC_API_KEY"] = "wrong"
+        self.assertEqual(self.go("--mode", "daily"), 2)  # 有警告，但新聞照常產出
+        d = self.doc("newsfeed")
+        self.assertGreater(len(d["items"]), 20)
+        self.assertTrue(any("AI" in p for p in self.doc("meta")["problems"]))
+
+    def test_news_source_down(self):
+        os.environ["MOCK_NEWS_FAIL"] = "1"
+        try:
+            self.go("--mode", "daily")
+        finally:
+            os.environ.pop("MOCK_NEWS_FAIL", None)
+        self.assertFalse((self.tmp / "data" / "site" / "newsfeed.json").exists())
+        self.assertFalse(self.doc("meta")["sources"]["newsfeed"]["ok"])

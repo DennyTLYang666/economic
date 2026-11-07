@@ -20,6 +20,7 @@ URLS = {
     "CALENDAR": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
     "CALENDAR_NEXT": "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
     "NEWS": "https://news.google.com/rss/search",
+    "AI": "https://api.anthropic.com/v1/messages",
     "NDC_META": "https://data.gov.tw/api/v2/rest/dataset/6099",
     "FUND_TLIFE": "https://178.taiwanlife.com/w/djjson/CtbclifeSearchJSONNEW.djjson?P1=ctbclife&P2=False&P3=False&P4=0&P5=0&",
     "FUND_NANSHAN": "https://ilp.nanshanlife.com.tw/w/custom/djjson/SearchProductJSON.djjson?P1=nanshan&P2=False&P3=False&P4=False&P5=0&P=0",

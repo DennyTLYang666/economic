@@ -10,12 +10,13 @@
 """
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import build, events, fetch, funds, news
+from . import build, events, fetch, funds, news, newsfeed
 from .common import ROOT, TZ, SourceError, atomic_write, load_series, merge_bars, save_series, write_pair
 
 MIN_OK_RATIO = 0.5  # 報價成功的標的低於這個比例，視為整體失敗，不更新網站
@@ -107,7 +108,7 @@ def main(argv=None):
     plan_funds = not args.offline and args.funds != "no" and (args.funds == "yes" or args.mode == "daily" or not old_f)
     plan_news = not args.offline and args.news != "no" and (args.news == "yes" or args.mode == "daily" or not old_n or stale(old_n, NEWS_MAX_AGE, now))
     full = not args.offline and (args.mode == "daily" or not fred)
-    prog = Progress(2 + (0 if args.offline else 3) + (1 if full else 0) + int(plan_funds) + int(plan_news))
+    prog = Progress(2 + (0 if args.offline else 3) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
     status, problems = {}, []
     src = {"yahoo": {"ok": 0, "fail": 0, "errors": []}, "fred": {"ok": 0, "fail": 0, "errors": []},
            "calendar": {"ok": False, "error": None, "note": None}, "news": {"ok": None, "errors": 0},
@@ -243,6 +244,21 @@ def main(argv=None):
             src["news"] = {"ok": False, "errors": 1}
             log("[提醒] 新聞更新失敗，沿用上一版：%s" % str(e)[:120])
 
+    # ---------- 「新聞」頁（主題彙整，保存 30 天）；和上面的標的新聞一起更新 ----------
+    if want_news:
+        old_nf = read_json(out / "newsfeed.json")
+        ncfg = newsfeed.load_cfg(root / "config" / "news_topics.json")
+        prog.stage("新聞彙整（主題標籤）", newsfeed.total_requests(ncfg))
+        try:
+            nfdoc, nferr, n_ai = newsfeed.refresh(ncfg, old_nf, now, pause=min(args.pause, 0.3), on_item=lambda k, key: prog.tick(k, key),
+                                                  api_key=os.environ.get("ANTHROPIC_API_KEY") or None)
+            docs["newsfeed"] = nfdoc
+            src["newsfeed"] = {"ok": True, "errors": len(nferr), "items": len(nfdoc["items"]), "ai": n_ai if nfdoc["ai"] else None}
+            problems += nferr[:3]
+        except SourceError as e:
+            src["newsfeed"] = {"ok": False, "errors": 1}
+            log("[提醒] 新聞彙整失敗，沿用上一版：%s" % str(e)[:120])
+
     prog.stage("寫入檔案")
     for name, obj in docs.items():
         write_pair(out / (name + ".json"), obj, "data/site/%s.json" % name)
@@ -264,6 +280,8 @@ def main(argv=None):
         extra += "；基金 台壽 %d・南山 %d 檔" % tuple(docs["funds"]["companies"].get(c, {}).get("count", 0) for c in ("tlife", "nanshan"))
     if "news" in docs:
         extra += "；新聞 %d 組" % len(docs["news"]["items"])
+    if "newsfeed" in docs:
+        extra += "；新聞頁 %d 則（重點 %d）" % (len(docs["newsfeed"]["items"]), sum(1 for i in docs["newsfeed"]["items"] if i.get("hot")))
     prog.done()
     log("完成（%s，%d 秒）：市場方塊 %d 個、趨勢圖 %d 張、總經 %d 項、行事曆 %d 筆；氣氛：%s%s"
         % (meta["mode"], round(time.time() - t_start), n_t, len(docs["trends"]["charts"]), len(docs["macro"]), len(docs["calendar"]), docs["overview"]["mood"]["label"], extra))
