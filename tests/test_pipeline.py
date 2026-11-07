@@ -296,6 +296,23 @@ class TestMacroAndGroups(Base):
         self.assertTrue(m["tw_signal"]["empty"])
         self.assertEqual(m["eu_ecb"]["value"], 2.0)
 
+    def test_manual_event_dedupe_against_auto(self):
+        from datetime import date
+        from pipeline import build
+        auto = [{"date": "2026-12-10", "time": "21:30", "event": "CPI 年增", "title": "CPI y/y", "country": "美國", "importance": "H",
+                 "previous": "", "forecast": "", "actual": "", "source": "auto"}]
+        manual = [{"date": "2026-12-10", "time": "21:30", "event": "美國 11 月 CPI", "country": "美國", "importance": "H", "dedupe": "CPI"},
+                  {"date": "2026-12-10", "event": "中國 CPI", "country": "中國", "importance": "M", "dedupe": "CPI"},  # 不同國家：保留
+                  {"date": "2026-12-12", "event": "美國 PPI", "country": "美國", "importance": "M", "dedupe": "CPI"},  # 名稱不符：保留
+                  {"date": "2026-12-20", "event": "美國 11 月 CPI", "country": "美國", "importance": "H"}]  # 沒寫 dedupe：保留
+        out = build.merge_calendar(auto, manual, date(2026, 11, 7))
+        names = [e["event"] for e in out]
+        self.assertNotIn("美國 11 月 CPI", [e["event"] for e in out if e["date"] == "2026-12-10"])
+        self.assertIn("中國 CPI", names)
+        self.assertIn("美國 PPI", names)
+        self.assertEqual(len([e for e in out if e["date"] == "2026-12-20"]), 1)
+        self.assertEqual(len([e for e in out if e["date"] == "2026-12-10" and e["country"] == "美國"]), 1)
+
     def test_ndc_zip_download(self):
         from pipeline import fetch
         base = os.environ["ECO_URL_NDC_META"].rsplit("/ndc/", 1)[0]

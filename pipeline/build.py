@@ -436,6 +436,26 @@ def build_macro(fred, calendar, today, intl=None):
 
 
 # ---------- 行事曆 ----------
+def _covered_by_auto(e, auto):
+    """手動事件寫了 dedupe（正規表示式）：自動事件同國家、日期相差 1 天內、名稱符合就算已涵蓋。"""
+    try:
+        pat = re.compile(e["dedupe"], re.I)
+        d0 = date.fromisoformat(e["date"])
+    except (re.error, ValueError):
+        return False
+    for a in auto:
+        if a.get("source") != "auto" or a.get("country") != e.get("country"):
+            continue
+        try:
+            if abs((date.fromisoformat(a["date"]) - d0).days) > 1:
+                continue
+        except ValueError:
+            continue
+        if pat.search((a.get("title") or "") + " " + (a.get("event") or "")):
+            return True
+    return False
+
+
 def merge_calendar(auto, manual, today, ccfg=None, feeds=()):
     """自動日曆＋手動事件＋ICS 訂閱，統一補上分類／標籤／範圍後依時間排序。"""
     ccfg = ccfg or events_mod.load_cfg(None)
@@ -446,6 +466,8 @@ def merge_calendar(auto, manual, today, ccfg=None, feeds=()):
         for e in items:
             if not e.get("date") or e["date"] < lo or (e["date"], e.get("event")) in seen:
                 continue
+            if e.get("dedupe") and _covered_by_auto(e, out):
+                continue  # 自動日曆已經涵蓋這個事件（同國家、前後 1 天、名稱符合），以自動資料為準
             seen.add((e["date"], e.get("event")))
             ev = {"date": e["date"], "time": e.get("time") or "", "event": e["event"], "country": e.get("country", ""),
                   "importance": e.get("importance", "M"), "previous": "", "forecast": "", "actual": "",
@@ -486,4 +508,4 @@ def build_all(cfg, daily, fred, auto_events, manual_events, status, today, ccfg=
     overview = {"mood": build_mood(T), "highlights": build_highlights(T, upcoming, [m for m in macro if m["country"] == "us" and not m.get("empty")]), "groups": groups, "events": upcoming[:30],
                 "dates": {"us": T.get("spx", {}).get("date"), "tw": T.get("twii", {}).get("date")}}
     return {"overview": overview, "trends": build_trends(cfg, daily), "macro": macro,
-            "lights": lights.build(cfg, daily, fred), "calendar": [e for e in calendar if e["date"] <= (today + timedelta(days=60)).isoformat()]}
+            "lights": lights.build(cfg, daily, fred), "calendar": [e for e in calendar if e["date"] <= (today + timedelta(days=150)).isoformat()]}
