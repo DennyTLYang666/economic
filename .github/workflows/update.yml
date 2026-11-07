@@ -8,6 +8,14 @@ on:
     - cron: "10 8 * * 1-5"    # 16:10 歐股開盤後（日更）
     - cron: "30 1-5 * * 1-5"  # 09:30–13:30 台股盤中（快照）
     - cron: "30 14 * * 1-5"   # 22:30 美股盤中（快照）
+  # 程式或設定一推上來就重抓資料（否則 Pages 會先用舊資料重新佈署）。
+  # 只監看程式與設定；本流程自己推的 data/ 不在範圍內，而且用 GITHUB_TOKEN 推送本來就不會再觸發 workflow，所以不會無限循環。
+  push:
+    branches: [main]
+    paths:
+      - "pipeline/**"
+      - "config/**"
+      - ".github/workflows/update.yml"
   workflow_dispatch:
     inputs:
       mode:
@@ -47,6 +55,9 @@ jobs:
           fi
 
       - name: 抓資料並產生網站資料
+        env:
+          # 選用：沒設這個 secret 就是空字串，新聞摘要沿用來源簡述／標題，其餘功能不受影響
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set +e
           python -m pipeline.run --mode "${{ steps.mode.outputs.mode }}"

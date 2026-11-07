@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """資料抓取：Yahoo 報價、FRED 總經、經濟日曆。每個來源獨立失敗，不影響其他來源。"""
 import csv
+import zipfile
 import io
 import json
 import os
@@ -197,6 +198,13 @@ def parse_ndc(text, cols):
     return out
 
 
+def _decode_bytes(raw):
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("cp950", errors="replace")
+
+
 def fetch_ndc(cols, csv_url=None):
     """先用設定／環境變數給的 CSV 網址；沒有就問 data.gov.tw 的資料集 API 取得下載連結。"""
     u = os.environ.get("ECO_URL_NDC_CSV") or csv_url
@@ -210,10 +218,29 @@ def fetch_ndc(cols, csv_url=None):
             raise SourceError("國發會資料集沒有可下載的檔案")
         u = pick.get("resourceDownloadUrl") or pick.get("downloadURL")
     raw = http_get(u)
-    try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        text = raw.decode("cp950", errors="replace")
+    # 國發會的下載連結有時是 ZIP（裡面有 manifest.csv 與一或多個資料 CSV）：逐一嘗試，取第一個含有所需欄位的檔
+    if raw[:4] == b"PK\x03\x04":
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except zipfile.BadZipFile:
+            raise SourceError("國發會下載檔是損毀的 ZIP")
+        names = [n for n in zf.namelist() if not n.endswith("/")]
+        data_names = [n for n in names if "manifest" not in n.lower()] or names
+        got, seen = {}, []
+        for n in data_names:
+            try:
+                txt = _decode_bytes(zf.read(n))
+                part = parse_ndc(txt, {k: v for k, v in cols.items() if k not in got})
+            except (csv.Error, SourceError, KeyError, RuntimeError, zipfile.BadZipFile):
+                part, txt = {}, ""
+            got.update(part)
+            seen.append("%s：%s" % (n, "｜".join(c.strip() for c in next(csv.reader(io.StringIO(txt.replace("\r", "\n"), newline="")), [])[:8])[:60]))
+            if len(got) == len(cols):
+                break
+        if not got:
+            raise SourceError("國發會 ZIP 內沒有找到需要的欄位；檔案：%s" % "；".join(seen)[:300])
+        return got
+    text = _decode_bytes(raw)
     try:
         got = parse_ndc(text, cols)
     except csv.Error as e:

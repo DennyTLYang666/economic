@@ -224,6 +224,13 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, json.dumps({"success": True, "result": {"distribution": [{"format": "JSON", "resourceDownloadUrl": base + "/nope"}, {"format": "CSV", "resourceDownloadUrl": base + "/ndc/csv"}]}}))
         if u.path == "/ndc/csv":
             return self._send(200, ndc_csv(), "text/csv; charset=utf-8")
+        if u.path == "/ndc/zip":  # 真實的下載連結是 ZIP：manifest.csv ＋ 資料檔（big5 編碼）
+            import io, zipfile
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w") as z:
+                z.writestr("manifest.csv", "file,desc\nndc.csv,景氣指標\n")
+                z.writestr("ndc.csv", ndc_csv().decode("utf-8-sig").encode("cp950", errors="replace"))
+            return self._send(200, buf.getvalue(), "application/zip")
         if u.path == "/cal/this":
             return self._send(200, json.dumps(calendar_json()))
         return self._send(404, "not found")

@@ -296,6 +296,30 @@ class TestMacroAndGroups(Base):
         self.assertTrue(m["tw_signal"]["empty"])
         self.assertEqual(m["eu_ecb"]["value"], 2.0)
 
+    def test_ndc_zip_download(self):
+        from pipeline import fetch
+        base = os.environ["ECO_URL_NDC_META"].rsplit("/ndc/", 1)[0]
+        cols = {"signal": "景氣對策信號綜合分數", "unemp": "失業率"}
+        os.environ["ECO_URL_NDC_CSV"] = base + "/ndc/zip"
+        try:
+            out = fetch.fetch_ndc(cols)
+        finally:
+            os.environ.pop("ECO_URL_NDC_CSV", None)
+        self.assertIn("signal", out)
+        self.assertIn("unemp", out)
+        self.assertGreater(len(out["signal"]), 20)
+
+    def test_ndc_zip_without_needed_columns(self):
+        from pipeline import fetch
+        base = os.environ["ECO_URL_NDC_META"].rsplit("/ndc/", 1)[0]
+        os.environ["ECO_URL_NDC_CSV"] = base + "/ndc/zip"
+        try:
+            with self.assertRaises(fetch.SourceError) as cm:
+                fetch.fetch_ndc({"x": "完全不存在的欄位"})
+        finally:
+            os.environ.pop("ECO_URL_NDC_CSV", None)
+        self.assertIn("ndc.csv", str(cm.exception))
+
     def test_parse_ndc_and_num(self):
         from pipeline import fetch, build
         txt = "\ufeff統計期,景氣對策信號綜合分數,失業率(%)\n202509,24,3.4\n202510,25,3.3\n"
