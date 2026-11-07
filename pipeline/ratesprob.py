@@ -132,7 +132,7 @@ def fetch_polymarket(cfg, today):
         try:
             body = json.loads(http_get("%s%s%s" % (base, "&" if "?" in base else "?", qs)))
         except (SourceError, ValueError) as e:
-            errs.append(str(e)[:100])
+            errs.append(str(e).split("：", 1)[-1][:60])  # 只留原因，不帶網址
             continue
         if isinstance(body, dict):
             body = body.get("events") or body.get("data") or []
@@ -145,7 +145,7 @@ def fetch_polymarket(cfg, today):
             break  # 已經找到會議市場，不必再試後面的查詢
     acc = parse_polymarket(events, cfg, today)
     if not acc:
-        raise SourceError("Polymarket 找不到 FOMC 利率市場%s" % ("（" + "；".join(errs[:2]) + "）" if errs else "（查詢成功但沒有符合的市場，可能市場名稱改了）"))
+        raise SourceError("預測市場找不到 FOMC 利率市場%s" % ("（" + "；".join(errs[:2]) + "）" if errs else "（查詢成功但沒有符合的市場，可能市場名稱改了）"))
     out = []
     for d in sorted(acc):
         a = acc[d]
@@ -212,7 +212,7 @@ def build(cfg, fred_upper, today, now):
         doc["poly"] = {"ok": True, "meetings": rows[:4]}
     except (SourceError, ValueError, KeyError, TypeError) as e:
         doc["poly"]["error"] = str(e)[:160]
-        warns.append("利率預期（Polymarket）：%s" % doc["poly"]["error"])
+        warns.append("利率預期（預測市場）：%s" % doc["poly"]["error"])
     if effr is None:
         doc["futures"]["error"] = "取不到目前利率，無法由期貨換算"
     else:
