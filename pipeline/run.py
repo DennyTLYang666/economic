@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import build, events, fetch, funds, news, newsfeed
+from . import build, events, fetch, funds, news, newsfeed, ratesprob
 from .common import ROOT, TZ, SourceError, atomic_write, load_series, merge_bars, save_series, write_pair
 
 MIN_OK_RATIO = 0.5  # 報價成功的標的低於這個比例，視為整體失敗，不更新網站
@@ -96,6 +96,7 @@ def main(argv=None):
     manual = (read_json(root / "config" / "events.json") or {}).get("events", [])
     ccfg = events.load_cfg(read_json(root / "config" / "calendar.json"))
     intl = read_json(root / "config" / "macro_intl.json") or {}
+    rcfg = ratesprob.load_cfg(read_json(root / "config" / "rates.json"))
     t_start = time.time()
     watch = read_json(root / "config" / "fund_watch.json") or {}
     sdir, out = root / "data" / "series", root / "data" / "site"
@@ -108,11 +109,11 @@ def main(argv=None):
     plan_funds = not args.offline and args.funds != "no" and (args.funds == "yes" or args.mode == "daily" or not old_f)
     plan_news = not args.offline and args.news != "no" and (args.news == "yes" or args.mode == "daily" or not old_n or stale(old_n, NEWS_MAX_AGE, now))
     full = not args.offline and (args.mode == "daily" or not fred)
-    prog = Progress(2 + (0 if args.offline else 3) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
+    prog = Progress(2 + (0 if args.offline else 4) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
     status, problems = {}, []
     src = {"yahoo": {"ok": 0, "fail": 0, "errors": []}, "fred": {"ok": 0, "fail": 0, "errors": []},
            "calendar": {"ok": False, "error": None, "note": None}, "news": {"ok": None, "errors": 0},
-           "funds": {"ok": None, "errors": []}}
+           "funds": {"ok": None, "errors": []}, "rates": {"ok": None}}
 
     auto_events = read_json(sdir / "calendar_cache.json") or []
     if not isinstance(auto_events, list):
@@ -194,8 +195,21 @@ def main(argv=None):
         problems += ["日曆" + w for w in fwarn]
     elif ccfg["feeds"]:
         feed_events = read_json(feed_cache) or []
+    rates_doc = None
+    if not args.offline:
+        prog.stage("利率預期（Polymarket、聯邦基金期貨）")
+        try:  # 加值資料：失敗就沿用上一版，不影響其他資料
+            rates_doc, rwarn = ratesprob.build(rcfg, fred.get("DFEDTARU"), today, now)
+            src["rates"] = {"ok": True, "poly": rates_doc["poly"]["ok"], "futures": rates_doc["futures"]["ok"]}
+            problems += rwarn
+        except (SourceError, ValueError, KeyError, TypeError, OSError) as e:
+            src["rates"] = {"ok": False}
+            problems.append("利率預期失敗，沿用上一版：%s" % str(e)[:140])
     prog.stage("整理成網站資料")
     docs = build.build_all(cfg, daily, fred, auto_events, manual, status, today, ccfg, feed_events, intl)
+
+    if rates_doc:
+        docs["rates"] = rates_doc
 
     # ---------- 基金（加值資料：失敗就保留上一版） ----------
     ids_path = sdir / "fund_ids.json"
@@ -250,9 +264,14 @@ def main(argv=None):
         ncfg = newsfeed.load_cfg(root / "config" / "news_topics.json")
         prog.stage("新聞彙整（主題標籤）", newsfeed.total_requests(ncfg))
         try:
+            expired = []
             nfdoc, nferr, n_ai = newsfeed.refresh(ncfg, old_nf, now, pause=min(args.pause, 0.3), on_item=lambda k, key: prog.tick(k, key),
-                                                  api_key=os.environ.get("ANTHROPIC_API_KEY") or None)
+                                                  api_key=os.environ.get("ANTHROPIC_API_KEY") or None, expired=expired)
             docs["newsfeed"] = nfdoc
+            try:  # 超過保存天數的新聞依月份封存（平常不載入，新聞頁按「看更早的新聞」才讀）
+                newsfeed.update_archive(out / newsfeed.ARCHIVE_DIR, expired, nfdoc["topics"], now)
+            except OSError as e:
+                nferr.append("新聞封存寫入失敗：%s" % str(e)[:80])
             src["newsfeed"] = {"ok": True, "errors": len(nferr), "items": len(nfdoc["items"]), "ai": n_ai if nfdoc["ai"] else None}
             problems += nferr[:3]
         except SourceError as e:

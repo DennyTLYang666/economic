@@ -1,0 +1,12 @@
+{
+  "_說明": "聯準會利率預期卡片（概覽頁）。fomc＝FOMC 會議「美東決議日」，下一次會議由這份清單決定，過期要補。queries＝Polymarket Gamma API 的查詢參數（依序嘗試，找到會議市場就停）。futures_symbol＝Yahoo 聯邦基金期貨代號樣板（{code}月份代碼、{yy}年份後兩碼）。gap_warn＝兩個來源差距達幾個百分點就在卡片上提醒。",
+  "fomc": ["2026-12-09", "2027-01-27", "2027-03-17"],
+  "queries": [
+    "tag_slug=fed&closed=false&limit=100",
+    "tag_slug=fed-rates&closed=false&limit=100",
+    "closed=false&active=true&limit=500&order=volume24hr&ascending=false"
+  ],
+  "futures_symbol": "ZQ{code}{yy}.CBT",
+  "step_bp": 25,
+  "gap_warn": 15
+}

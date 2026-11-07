@@ -13,6 +13,7 @@ import json
 import math
 import os
 import random
+import re
 import threading
 import urllib.parse
 from datetime import date, datetime, timedelta, timezone
@@ -61,6 +62,12 @@ def rng_for(key):
 
 
 def yahoo_body(sym, rng_name, last_date):
+    if re.match(r"^ZQ[FGHJKMNQUVXZ]\d\d\.CBT$", sym):  # 聯邦基金期貨：價格＝100−隱含利率（MOCK_ZQ_RATE，預設 3.80）
+        px = 100 - float(os.environ.get("MOCK_ZQ_RATE", "3.80"))
+        day = bdays_back(last_date, 1)[0]
+        ts = int(datetime(day.year, day.month, day.day, 12, tzinfo=timezone.utc).timestamp())
+        return {"chart": {"result": [{"meta": {"gmtoffset": 0, "regularMarketPrice": px, "regularMarketTime": ts},
+                                      "timestamp": [ts], "indicators": {"quote": [{"close": [px]}]}}], "error": None}}
     if sym not in LAST:
         return None
     n = RANGE_DAYS.get(rng_name, 22)
@@ -85,7 +92,13 @@ def yahoo_body(sym, rng_name, last_date):
 def fred_csv(sid, start):
     last = date.fromisoformat(os.environ.get("MOCK_LAST_DATE", "2026-11-05"))
     rows = ["observation_date,%s" % sid]
-    if sid in FRED_LEVEL:
+    if sid == "DFF":  # 有效聯邦基金利率：固定 3.88
+        days = bdays_back(last - timedelta(days=1), 30)
+        rows += ["%s,3.88" % d.isoformat() for d in days]
+    elif sid == "DFEDTARU":  # 目標區間上限：固定 4.00（3.75–4.00）
+        days = bdays_back(last - timedelta(days=1), 520)
+        rows += ["%s,4.00" % d.isoformat() for d in days]
+    elif sid in FRED_LEVEL:
         r = rng_for(sid)
         v = FRED_LEVEL[sid]
         days = bdays_back(last - timedelta(days=1), 520)
@@ -125,6 +138,24 @@ def ndc_csv():
         if m == 13:
             y, m = y + 1, 1
     return ("\ufeff" + "\n".join(rows) + "\n").encode("utf-8")
+
+
+def poly_events():
+    """模擬 Polymarket Gamma /events：兩個 FOMC 會議事件＋一個無關事件。"""
+    def mk(i, q, yes, vol=1000):
+        return {"id": str(i), "question": q, "outcomes": '["Yes","No"]', "outcomePrices": json.dumps(["%.3f" % yes, "%.3f" % (1 - yes)]),
+                "volume": str(vol), "closed": False, "active": True}
+    dec = {"id": "e1", "title": "Fed decision in December?", "markets": [
+        mk(1, "Will the Fed decrease interest rates by 25 bps after the December 2026 meeting?", 0.40, 50000),
+        mk(2, "Will the Fed decrease interest rates by 50+ bps after the December 2026 meeting?", 0.03, 20000),
+        mk(3, "Will there be no change in Fed interest rates after the December 2026 meeting?", 0.55, 80000),
+        mk(4, "Will the Fed increase interest rates by 25+ bps after the December 2026 meeting?", 0.02, 5000)]}
+    jan = {"id": "e2", "title": "Fed decision in January?", "markets": [
+        mk(5, "Will the Fed decrease interest rates by 25 bps after the January 2027 meeting?", 0.30),
+        mk(6, "Will there be no change in Fed interest rates after the January 2027 meeting?", 0.60)]}  # 合計 90%：要正規化
+    other = {"id": "e3", "title": "Will Bitcoin hit $150k?", "markets": [mk(7, "Will Bitcoin hit $150k in 2026?", 0.2)]}
+    count = {"id": "e4", "title": "How many Fed rate cuts in 2026?", "markets": [mk(8, "Will the Fed cut rates 3 times in 2026?", 0.4)]}
+    return [other, count, dec, jan]
 
 
 def calendar_json():
@@ -217,6 +248,10 @@ class H(BaseHTTPRequestHandler):
                           "<item><title>美股收盤 道瓊大跌 費半崩 - 自由時報</title><link>https://ltn.example/1</link><pubDate>%s</pubDate><source url=\"https://l\">自由時報</source></item>" % when(4) +
                           "<item><title>新台幣貶值 美元匯率升破32 - 鉅亨網</title><link>https://cnyes.example/1</link><pubDate>%s</pubDate><source url=\"https://n\">鉅亨網</source></item>" % when(5))
             return self._send(200, '<?xml version="1.0" encoding="UTF-8"?><rss><channel>%s</channel></rss>' % items, "application/rss+xml")
+        if u.path == "/poly":
+            if os.environ.get("MOCK_POLY_FAIL") == "1":
+                return self._send(503, "down")
+            return self._send(200, json.dumps(poly_events()))
         if u.path == "/ndc/meta":
             if os.environ.get("MOCK_NDC_FAIL") == "1":
                 return self._send(500, "{}")
@@ -245,7 +280,7 @@ def start(port=0):
 def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
-            "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_AI": base + "/ai",
+            "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_POLYMARKET": base + "/poly", "ECO_URL_AI": base + "/ai",
             "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 

@@ -6,12 +6,13 @@ import shutil
 import sys
 import tempfile
 import unittest
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mock_server  # noqa: E402
-from pipeline import build, fetch, newsfeed, run  # noqa: E402
+from pipeline import build, fetch, newsfeed, ratesprob, run  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -33,7 +34,7 @@ class Base(unittest.TestCase):
         self._saved = dict(os.environ)
         os.environ.update(self.env)
         os.environ["ECO_BACKOFF"] = "0"
-        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP", "MOCK_NEWS_BIG", "MOCK_AI_FAIL", "ANTHROPIC_API_KEY"):
+        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP", "MOCK_NEWS_BIG", "MOCK_AI_FAIL", "ANTHROPIC_API_KEY", "MOCK_POLY_FAIL", "MOCK_ZQ_RATE"):
             os.environ.pop(k, None)
 
     def tearDown(self):
@@ -562,6 +563,44 @@ class TestNewsFeed(Base):
         again = newsfeed.merge(out, raw, now, cfg)
         self.assertEqual(len(again), len(out))
 
+    def test_expired_news_is_archived_by_month(self):
+        import json
+        from datetime import datetime, timedelta
+        cfg, now = self.cfg(), datetime.now(newsfeed.TZ)
+        d1, d2 = now - timedelta(days=45), now - timedelta(days=40)
+        old = [{"id": "a", "t": "四十五天前的舊新聞內容很長很長", "u": "https://o/1", "s": "甲", "d": d1.isoformat(timespec="minutes"), "tg": ["mkt"], "hot": True},
+               {"id": "c", "t": "四十天前的另一則舊新聞內容也不短", "u": "https://o/3", "s": "乙", "d": d2.isoformat(timespec="minutes"), "tg": ["re"]},
+               {"id": "b", "t": "十天前的新聞保留下來的內容", "u": "https://o/2", "s": "乙", "d": (now - timedelta(days=10)).isoformat(timespec="minutes"), "tg": ["re"]}]
+        expired = []
+        out = newsfeed.merge(old, [], now, cfg, expired)
+        self.assertEqual([i["id"] for i in out], ["b"])
+        self.assertEqual({i["id"] for i in expired}, {"a", "c"})
+        self.assertNotIn("_t", expired[0])
+        adir = self.tmp / "arch"
+        topics = [{"id": "mkt", "name": "股市行情"}]
+        newsfeed.update_archive(adir, expired, topics, now)
+        newsfeed.update_archive(adir, expired, topics, now)  # 重複寫入不會重複
+        idx = json.loads((adir / "index.json").read_text(encoding="utf-8"))
+        total = sum(m["n"] for m in idx["months"])
+        self.assertEqual(total, 2)
+        self.assertEqual(idx["months"], sorted(idx["months"], key=lambda m: m["m"], reverse=True))
+        m = idx["months"][0]["m"]
+        mdoc = json.loads((adir / (m + ".json")).read_text(encoding="utf-8"))
+        self.assertEqual(mdoc["month"], m)
+        self.assertTrue((adir / (m + ".js")).exists())
+        # 沒有過期新聞時也要有（空的）索引，前端才不會 404
+        empty = self.tmp / "arch2"
+        newsfeed.update_archive(empty, [], topics, now)
+        self.assertEqual(json.loads((empty / "index.json").read_text(encoding="utf-8"))["months"], [])
+
+    def test_run_writes_archive_index(self):
+        import json
+        os.environ["MOCK_NEWS_BIG"] = "1"
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        idx = self.tmp / "data" / "site" / "news-archive" / "index.json"
+        self.assertTrue(idx.exists())
+        self.assertIn("months", json.loads(idx.read_text(encoding="utf-8")))
+
     def test_cluster_swaps_to_better_source(self):
         from datetime import datetime
         cfg, now = self.cfg(), datetime.now(newsfeed.TZ)
@@ -623,3 +662,94 @@ class TestNewsFeed(Base):
             os.environ.pop("MOCK_NEWS_FAIL", None)
         self.assertFalse((self.tmp / "data" / "site" / "newsfeed.json").exists())
         self.assertFalse(self.doc("meta")["sources"]["newsfeed"]["ok"])
+
+
+class TestRates(Base):
+    TODAY = date(2026, 11, 7)
+
+    def cfg(self):
+        return ratesprob.load_cfg({"fomc": ["2026-12-09", "2027-01-27", "2027-03-17"]})
+
+    def test_classify(self):
+        c = ratesprob.classify
+        self.assertEqual(c("Will there be no change in Fed interest rates"), "hold")
+        self.assertEqual(c("Fed decrease interest rates by 25 bps"), "cut")
+        self.assertEqual(c("Fed cuts 50+ bps"), "cut")
+        self.assertEqual(c("Will the Fed increase rates by 25+ bps"), "hike")
+        self.assertIsNone(c("Will Bitcoin hit 150k"))
+
+    def test_polymarket_parse_and_normalize(self):
+        rows = ratesprob.fetch_polymarket(self.cfg(), self.TODAY)
+        by = {r["date"]: r for r in rows}
+        self.assertEqual(sorted(by), ["2026-12-09", "2027-01-27"])  # 比特幣、「今年降幾次」這類市場被忽略
+        d = by["2026-12-09"]
+        self.assertEqual((d["cut"], d["hold"], d["hike"]), (43.0, 55.0, 2.0))  # 25bp 降 40 ＋ 50bp 降 3
+        j = by["2027-01-27"]  # 合計 90%：正規化
+        self.assertAlmostEqual(j["cut"] + j["hold"] + j["hike"], 100, delta=0.2)
+        self.assertEqual(j["hike"], 0.0)
+
+    def test_polymarket_incomplete_market_has_no_numbers(self):
+        ev = [{"id": "x", "title": "Fed decision in December?", "markets": [
+            {"id": "1", "question": "Will the Fed decrease interest rates by 25 bps after the December 2026 meeting?",
+             "outcomes": '["Yes","No"]', "outcomePrices": '["0.2","0.8"]', "closed": False}]}]
+        acc = ratesprob.parse_polymarket(ev, self.cfg(), self.TODAY)
+        self.assertEqual(acc["2026-12-09"]["cut"], 0.2)  # 只有一個選項：合計 20%，後續 fetch 會標「不完整」
+
+    def test_futures_estimate(self):
+        f = ratesprob.futures_estimate(self.cfg(), date(2026, 12, 9), 3.88)  # 預設 3.80：預期降 ~11bp
+        self.assertEqual(f["symbol"], "ZQZ26.CBT")
+        self.assertAlmostEqual(f["implied_bp"], -11.3, delta=0.2)
+        self.assertAlmostEqual(f["cut"], 45.0, delta=0.3)
+        self.assertAlmostEqual(f["cut"] + f["hold"], 100, delta=0.2)
+        self.assertEqual(f["hike"], 0.0)
+
+    def test_futures_end_of_month_meeting_uses_next_contract(self):
+        f = ratesprob.futures_estimate(self.cfg(), date(2027, 1, 27), 3.88)
+        self.assertEqual(f["symbol"], "ZQG27.CBT")  # 1/27 會議距月底只剩 4 天 → 改看 2 月合約
+        self.assertAlmostEqual(f["implied_bp"], -8.0, delta=0.1)
+
+    def test_build_gap_and_next_meeting(self):
+        now = datetime(2026, 11, 7, 12, 0, tzinfo=run.TZ)
+        doc, warns = ratesprob.build(self.cfg(), [(date(2026, 11, 6), 4.0)], self.TODAY, now)
+        self.assertEqual(warns, [])
+        self.assertEqual(doc["next"], {"date": "2026-12-09", "days": 32})
+        self.assertEqual((doc["current"]["upper"], doc["current"]["lower"], doc["current"]["effr"]), (4.0, 3.75, 3.88))
+        self.assertTrue(doc["poly"]["ok"] and doc["futures"]["ok"])
+        self.assertAlmostEqual(doc["gap"], 2.0, delta=0.5)
+        self.assertFalse(doc["gap_warn"])
+
+    def test_gap_warning_when_sources_disagree(self):
+        os.environ["MOCK_ZQ_RATE"] = "3.60"  # 期貨預期降 ~40bp（上限 100%），Polymarket 只有 43%
+        doc, _ = ratesprob.build(self.cfg(), [(date(2026, 11, 6), 4.0)], self.TODAY, datetime(2026, 11, 7, tzinfo=run.TZ))
+        self.assertTrue(doc["gap_warn"])
+        self.assertGreater(doc["gap"], 15)
+
+    def test_one_source_down_still_builds(self):
+        os.environ["MOCK_POLY_FAIL"] = "1"
+        doc, warns = ratesprob.build(self.cfg(), [(date(2026, 11, 6), 4.0)], self.TODAY, datetime(2026, 11, 7, tzinfo=run.TZ))
+        self.assertFalse(doc["poly"]["ok"])
+        self.assertTrue(doc["futures"]["ok"])
+        self.assertNotIn("gap", doc)
+        self.assertEqual(len(warns), 1)
+
+    def test_both_down_raises(self):
+        os.environ["MOCK_POLY_FAIL"] = "1"
+        os.environ["MOCK_FAIL"] = "ZQZ26.CBT"
+        with self.assertRaises(ratesprob.SourceError):
+            ratesprob.build(self.cfg(), [(date(2026, 11, 6), 4.0)], self.TODAY, datetime(2026, 11, 7, tzinfo=run.TZ))
+
+    def test_expired_fomc_list_is_reported(self):
+        with self.assertRaises(ratesprob.SourceError):
+            ratesprob.build(ratesprob.load_cfg({"fomc": ["2020-01-29"]}), [], self.TODAY, datetime(2026, 11, 7, tzinfo=run.TZ))
+
+    @unittest.skipIf(date.today() > date(2026, 12, 8), "config/rates.json 的下一次會議日期已過")
+    def test_run_writes_rates_and_failure_keeps_old(self):
+        self.assertEqual(self.go("--mode", "daily"), 0)
+        r = self.doc("rates")
+        self.assertTrue(r["poly"]["ok"] and r["futures"]["ok"])
+        self.assertTrue((self.tmp / "data" / "site" / "rates.js").exists())
+        os.environ["MOCK_POLY_FAIL"] = "1"
+        os.environ["MOCK_FAIL"] = "ZQZ26.CBT"
+        self.assertEqual(self.go("--mode", "snapshot"), 2)  # 利率預期失敗＝警告，網站其他資料照常更新
+        self.assertEqual(self.doc("rates"), r)  # 沿用上一版
+        self.assertTrue(any("利率預期" in p for p in self.doc("meta")["problems"]))

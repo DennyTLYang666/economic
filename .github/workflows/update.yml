@@ -2,12 +2,14 @@ name: 更新市場資料
 
 on:
   schedule:
-    # 台灣時間 = UTC+8；GitHub 排程為盡力而為，可能延遲數分鐘
-    - cron: "20 22 * * 1-5"   # 06:20 美股收盤後（日更，寫入歷史）
-    - cron: "10 6 * * 1-5"    # 14:10 台股收盤後（日更）
-    - cron: "10 8 * * 1-5"    # 16:10 歐股開盤後（日更）
-    - cron: "30 1-5 * * 1-5"  # 09:30–13:30 台股盤中（快照）
-    - cron: "30 14 * * 1-5"   # 22:30 美股盤中（快照）
+    # 台灣時間 = UTC+8，平日（台灣時間週一～週五白天、美股夜盤落在週一晚～週六凌晨）。
+    # 刻意錯開整點／半點（:07、:37）：GitHub 排程在整點附近最容易延遲。排程為盡力而為，可能晚幾分鐘。
+    - cron: "7 23 * * 1-5"      # 07:07（週二～週六）美股收盤後：日更，寫入歷史
+    - cron: "7,37 1-5 * * 1-5"  # 09:07–13:37 台股盤中（約每 30 分鐘）：快照
+    - cron: "37 6 * * 1-5"      # 14:37 台股收盤後：日更，寫入歷史
+    - cron: "37 13 * * 1-5"     # 21:37 美股盤前～開盤（夏令 21:30 開，冬令 22:30 開）：快照
+    - cron: "7,37 14-15 * * 1-5" # 22:07–23:37 美股盤中：快照
+    - cron: "7 16 * * 1-5"      # 00:07（週二～週六）美股盤中最後一次：快照；之後睡覺，到 07:07 再日更
   # 程式或設定一推上來就重抓資料（否則 Pages 會先用舊資料重新佈署）。
   # 只監看程式與設定；本流程自己推的 data/ 不在範圍內，而且用 GITHUB_TOKEN 推送本來就不會再觸發 workflow，所以不會無限循環。
   push:
@@ -25,8 +27,9 @@ on:
         options: [daily, snapshot]
 
 permissions:
-  contents: write
-  pages: write
+  contents: write   # 日更把資料 commit 回 main
+  pages: write      # 佈署到 GitHub Pages
+  id-token: write   # actions/deploy-pages 需要
 
 concurrency:
   group: eco-data-update
@@ -48,10 +51,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "30 1-5 * * 1-5" ] || [ "${{ github.event.schedule }}" = "30 14 * * 1-5" ]; then
-            echo "mode=snapshot" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "mode=daily" >> "$GITHUB_OUTPUT"          # 程式或設定更新：完整重抓
+          elif [ "${{ github.event.schedule }}" = "7 23 * * 1-5" ] || [ "${{ github.event.schedule }}" = "37 6 * * 1-5" ]; then
+            echo "mode=daily" >> "$GITHUB_OUTPUT"          # 每天兩次日更
           else
-            echo "mode=daily" >> "$GITHUB_OUTPUT"
+            echo "mode=snapshot" >> "$GITHUB_OUTPUT"       # 其餘都是盤中快照
           fi
 
       - name: 抓資料並產生網站資料
@@ -67,7 +72,10 @@ jobs:
           if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then exit "$code"; fi
           if [ "$code" -eq 2 ]; then echo "::warning::部分資料來源失敗，詳見 data/site/meta.json"; fi
 
-      - name: 推回 main
+      # 只有日更才 commit：歷史資料（data/series）與最近一次完整資料（data/site）靠這裡保存；
+      # 盤中快照不 commit，只把結果佈署出去（所以 Git 歷史一天只有約 2 筆）。
+      - name: 推回 main（僅日更）
+        if: steps.mode.outputs.mode == 'daily'
         run: |
           git config user.name "eco-bot"
           git config user.email "eco-bot@users.noreply.github.com"
@@ -76,14 +84,32 @@ jobs:
             echo "資料無變動"
             exit 0
           fi
-          git commit -m "data: ${{ steps.mode.outputs.mode }} $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')"
+          git commit -m "data: daily $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')"
           for i in 1 2 3; do
             git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
             echo "推送失敗，重試 $i"; sleep 5
           done
           exit 1
 
-      - name: 通知 Pages 重建（Deploy from a branch 才需要；失敗不影響結果）
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" >/dev/null && echo "已要求 Pages 重建" || echo "::notice::略過 Pages 重建通知（Pages 會在 push 後自行建置）"
+      # 只佈署網站需要的檔案；data/series（歷史）不公開
+      - name: 組出要佈署的網站
+        run: |
+          mkdir -p _site/data
+          cp index.html _site/
+          touch _site/.nojekyll
+          cp -r data/site _site/data/site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  # 資料抓完（程式沒有全面失敗）才佈署；失敗時網站維持上一次成功的內容
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

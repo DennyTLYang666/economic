@@ -19,7 +19,9 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 
-from .common import SourceError, TZ, UA, http_get, url
+from pathlib import Path
+
+from .common import SourceError, TZ, UA, http_get, url, write_pair
 
 OVERLAP = 0.42       # 兩則標題的二連詞重疊比例（交集÷較短者）達此值，且共用 ≥ MIN_SHARED 個，視為同一事件
 MIN_SHARED = 3
@@ -196,8 +198,9 @@ def _also(c):
     return {"s": c.get("s", ""), "t": c["t"][:60], "u": c["u"]}
 
 
-def merge(old_items, raw, now, cfg):
-    """old_items：上次存的（每則＝一個事件）。raw：這次抓到的 [(item, topic)]。回傳新的事件清單。"""
+def merge(old_items, raw, now, cfg, expired=None):
+    """old_items：上次存的（每則＝一個事件）。raw：這次抓到的 [(item, topic)]。回傳新的事件清單。
+    expired（選填的 list）：超過保存天數、或超過上限而被擠掉的事件會放進去，由呼叫端寫入封存。"""
     weights = cfg["hot"]["sources"]
     keep_from = now - timedelta(days=cfg["retention_days"])
     clusters = []
@@ -240,18 +243,57 @@ def merge(old_items, raw, now, cfg):
             hit["also"] = [a for a in hit["also"] if a["u"] != it["u"]] + [swap]
     out = []
     for c in clusters:
-        if c["_t"] < keep_from:
-            continue
         c["also"] = c.get("also", [])[:ALSO_MAX]
         c["n"] = 1 + len({a["s"] for a in c["also"] if a["s"] and a["s"] != c.get("s")})  # n＝幾家媒體報導
         d = {k: v for k, v in c.items() if not k.startswith("_") and v not in ("", None)}
         if not d.get("also"):
             d.pop("also", None)
+        if c["_t"] < keep_from:
+            if expired is not None:
+                expired.append(d)
+            continue
         out.append(d)
     out.sort(key=lambda x: x.get("d", ""), reverse=True)
+    if expired is not None:
+        expired.extend(out[cfg["max_items"]:])
     out = out[: cfg["max_items"]]
     mark_hot(out, cfg)
     return out
+
+
+ARCHIVE_DIR = "news-archive"
+
+
+def update_archive(adir, expired, topics, now):
+    """把過期的新聞依月份（以發布日期為準）寫進 adir/YYYY-MM.json，並重建 adir/index.json。
+    封存只在使用者點「看更早的新聞」時才載入，平常的 newsfeed.json 不受影響。同一則（id）不重複寫入。"""
+    adir = Path(adir)
+    by_month = {}
+    for it in expired or []:
+        m = (it.get("d") or "")[:7]
+        if len(m) == 7:
+            by_month.setdefault(m, []).append(it)
+    for m, new in by_month.items():
+        f = adir / (m + ".json")
+        cur = []
+        if f.exists():
+            try:
+                cur = json.loads(f.read_text(encoding="utf-8")).get("items", [])
+            except (ValueError, OSError):
+                cur = []
+        have = {x.get("id") for x in cur}
+        cur += [x for x in new if x.get("id") not in have]
+        cur.sort(key=lambda x: x.get("d", ""), reverse=True)
+        write_pair(f, {"month": m, "topics": topics, "items": cur}, "data/site/%s/%s.json" % (ARCHIVE_DIR, m))
+    months = []
+    for f in sorted(adir.glob("????-??.json"), reverse=True) if adir.exists() else []:
+        try:
+            items = json.loads(f.read_text(encoding="utf-8")).get("items", [])
+        except (ValueError, OSError):
+            continue
+        months.append({"m": f.stem, "n": len(items), "hot": sum(1 for x in items if x.get("hot"))})
+    write_pair(adir / "index.json", {"updated": now.isoformat(timespec="seconds"), "months": months}, "data/site/%s/index.json" % ARCHIVE_DIR)
+    return len(months)
 
 
 def _dt(s):
@@ -307,12 +349,12 @@ def ai_enrich(items, cfg, key, now):
 
 
 # ---------- 對外 ----------
-def refresh(cfg, old_doc, now, pause=0.2, on_item=None, api_key=None):
+def refresh(cfg, old_doc, now, pause=0.2, on_item=None, api_key=None, expired=None):
     """回傳 (文件, 錯誤清單, AI 補摘要數)。old_doc 可為 None。全部來源失敗才丟 SourceError。"""
     old = [x for x in (old_doc or {}).get("items", [])]
     days = 2 if old else 7
     raw, errors = collect(cfg, days, pause, on_item)
-    items = merge(old, raw, now, cfg)
+    items = merge(old, raw, now, cfg, expired)
     n_ai = 0
     if api_key:
         try:
