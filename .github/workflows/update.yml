@@ -1,30 +1,46 @@
+
 name: 更新市場資料
 
 on:
   schedule:
-    # 台灣時間 = UTC+8，平日（台灣時間週一～週五白天、美股夜盤落在週一晚～週六凌晨）。
-    # 刻意錯開整點／半點（:07、:37）：GitHub 排程在整點附近最容易延遲。排程為盡力而為，可能晚幾分鐘。
-    - cron: "7 23 * * 1-5"      # 07:07（週二～週六）美股收盤後：日更，寫入歷史
-    - cron: "7,37 1-5 * * 1-5"  # 09:07–13:37 台股盤中（約每 30 分鐘）：快照
-    - cron: "37 6 * * 1-5"      # 14:37 台股收盤後：日更，寫入歷史
-    - cron: "37 13 * * 1-5"     # 21:37 美股盤前～開盤（夏令 21:30 開，冬令 22:30 開）：快照
-    - cron: "7,37 14-15 * * 1-5" # 22:07–23:37 美股盤中：快照
-    - cron: "7 16 * * 1-5"      # 00:07（週二～週六）美股盤中最後一次：快照；之後睡覺，到 07:07 再日更
-  # 程式或設定一推上來就重抓資料（否則 Pages 會先用舊資料重新佈署）。
-  # 只監看程式與設定；本流程自己推的 data/ 不在範圍內，而且用 GITHUB_TOKEN 推送本來就不會再觸發 workflow，所以不會無限循環。
+    # 🇯🇵 日本股市
+    # 台灣時間 08:07～14:37
+    - cron: "7,37 0-2 * * 1-5"
+    - cron: "7 3 * * 1-5"
+    - cron: "7,37 4-6 * * 1-5"
+
+    # 🇪🇺 歐洲 + 🇺🇸 美國
+    # UTC 07:07～20:37
+    # 台灣時間 15:07～04:37（隔日）
+    # 涵蓋歐洲夏令/冬令及美國夏令/冬令
+    - cron: "7,37 7-20 * * 1-5"
+
+    # 台灣時間 05:07
+    # 美國冬令收盤後最後一次快照
+    - cron: "7 21 * * 1-5"
+
+    # 🇺🇸 美國收盤後日結
+    # 台灣時間 07:07（週二～週六）
+    - cron: "7 23 * * 1-5"
+
+  # 程式及設定異動時重新抓取
   push:
     branches: [main]
     paths:
       - "pipeline/**"
       - "config/**"
       - ".github/workflows/update.yml"
+
+  # 手動執行
   workflow_dispatch:
     inputs:
       mode:
         description: "daily＝寫入歷史；snapshot＝只更新最新價"
         type: choice
         default: daily
-        options: [daily, snapshot]
+        options:
+          - daily
+          - snapshot
 
 permissions:
   contents: write   # 日更把資料 commit 回 main
@@ -39,6 +55,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
 
@@ -48,68 +65,96 @@ jobs:
 
       - name: 決定模式
         id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            echo "mode=daily" >> "$GITHUB_OUTPUT"          # 程式或設定更新：完整重抓
-          elif [ "${{ github.event.schedule }}" = "7 23 * * 1-5" ] || [ "${{ github.event.schedule }}" = "37 6 * * 1-5" ]; then
-            echo "mode=daily" >> "$GITHUB_OUTPUT"          # 每天兩次日更
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "mode=$INPUT_MODE" >> "$GITHUB_OUTPUT"
+
+          elif [ "$EVENT_NAME" = "push" ]; then
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+
+          elif [ "$SCHEDULE" = "7 23 * * 1-5" ]; then
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+
           else
-            echo "mode=snapshot" >> "$GITHUB_OUTPUT"       # 其餘都是盤中快照
+            echo "mode=snapshot" >> "$GITHUB_OUTPUT"
           fi
 
+      # 抓取資料
       - name: 抓資料並產生網站資料
         env:
-          # 選用：沒設這個 secret 就是空字串，新聞摘要沿用來源簡述／標題，其餘功能不受影響
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set +e
           python -m pipeline.run --mode "${{ steps.mode.outputs.mode }}"
           code=$?
-          echo "exit code: $code"
-          # 0 = 成功；2 = 部分來源失敗（仍可推送，網頁會標示）；其他 = 全面失敗，不推送
-          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then exit "$code"; fi
-          if [ "$code" -eq 2 ]; then echo "::warning::部分資料來源失敗，詳見 data/site/meta.json"; fi
 
-      # 只有日更才 commit：歷史資料（data/series）與最近一次完整資料（data/site）靠這裡保存；
-      # 盤中快照不 commit，只把結果佈署出去（所以 Git 歷史一天只有約 2 筆）。
-      - name: 推回 main（僅日更）
+          echo "exit code: $code"
+
+          # 0 = 成功
+          # 2 = 部分來源失敗，仍可部署
+          # 其他 = 全面失敗，不部署
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            exit "$code"
+          fi
+
+          if [ "$code" -eq 2 ]; then
+            echo "::warning::部分資料來源失敗，詳見 data/site/meta.json"
+          fi
+
+      # 只有 daily 才 commit
+      - name: 推回 main（僅日結）
         if: steps.mode.outputs.mode == 'daily'
         run: |
           git config user.name "eco-bot"
           git config user.email "eco-bot@users.noreply.github.com"
+
           git add data/series data/site
+
           if git diff --cached --quiet; then
             echo "資料無變動"
             exit 0
           fi
+
           git commit -m "data: daily $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')"
+
           for i in 1 2 3; do
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
-            echo "推送失敗，重試 $i"; sleep 5
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" \
+              && git push origin "HEAD:${GITHUB_REF_NAME}" \
+              && exit 0
+
+            echo "推送失敗，重試 $i"
+            sleep 5
           done
+
           exit 1
 
-      # 只佈署網站需要的檔案；data/series（歷史）不公開
+      # 組出 Pages 網站
       - name: 組出要佈署的網站
         run: |
           mkdir -p _site/data
+
           cp index.html _site/
           touch _site/.nojekyll
+
           cp -r data/site _site/data/site
 
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
-  # 資料抓完（程式沒有全面失敗）才佈署；失敗時網站維持上一次成功的內容
+  # 部署網站
   deploy:
     needs: update
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
