@@ -3,7 +3,7 @@ name: 更新市場資料
 
 on:
   schedule:
-    - cron: "33 0-23 * * 1-5"
+    - cron: "3/15 0-23 * * 1-5"
     # 🇯🇵 日本股市
     # 台灣時間 08:07～14:37
 #    - cron: "7,37 0-6 * * 1-5"
@@ -42,6 +42,7 @@ on:
           - snapshot
 
 permissions:
+  actions: write
   contents: write   # 日更把資料 commit 回 main
   pages: write      # 佈署到 GitHub Pages
   id-token: write   # actions/deploy-pages 需要
