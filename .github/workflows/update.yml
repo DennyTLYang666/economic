@@ -1,5 +1,5 @@
 
-name: 更新市場資料
+name: 更新市場資料 v2
 
 on:
   schedule:
