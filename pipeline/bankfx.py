@@ -8,27 +8,56 @@ from datetime import datetime
 
 from .common import SourceError, http_get, num, url
 
-ROW = re.compile(r"([A-Z]{3})\s+本行買入((?:\s+[\d.,]+){2,9})\s+本行賣出((?:\s+[\d.,]+){2,9})")
+DEFAULT = {"currencies": [{"code": "USD", "name": "美元", "dec": 3, "mid": ["usdtwd"]}, {"code": "JPY", "name": "日圓", "dec": 4, "mid": ["usdtwd", "/usdjpy"]}, {"code": "EUR", "name": "歐元", "dec": 3, "mid": ["usdtwd", "eurusd"]}, {"code": "CNY", "name": "人民幣", "dec": 3, "mid": ["usdtwd", "/usdcny"]}, {"code": "AUD", "name": "澳幣", "dec": 3, "mid": ["usdtwd", "audusd"]}, {"code": "HKD", "name": "港幣", "dec": 3, "mid": ["usdtwd", "/usdhkd"]}, {"code": "GBP", "name": "英鎊", "dec": 3, "mid": ["usdtwd", "gbpusd"]}, {"code": "KRW", "name": "韓元", "dec": 4, "mid": ["usdtwd", "/usdkrw"]}, {"code": "SGD", "name": "新加坡幣", "dec": 3, "mid": ["usdtwd", "/usdsgd"]}]}  # config/bankfx.json 沒推上去或不見時的內建預設（這樣漏推設定檔也不會整塊靜悄悄消失）
+
 MAX_GAP = 0.08  # 牌告賣出價和市場中間價差超過 8% 視為異常（現鈔、冷門幣別的價差通常 1～3%）
 
 
-def parse(text):
-    """回傳 {代號: {"cash": (買入, 賣出), "spot": (買入, 賣出)}}；沒有報價的欄位是 None。"""
-    if isinstance(text, bytes):
-        text = text.decode("utf-8-sig", "replace")
-    out = {}
-    for m in ROW.finditer(text or ""):
-        buy = [num(x) for x in m.group(2).split()]
-        sell = [num(x) for x in m.group(3).split()]
-        if len(buy) < 2 or len(sell) < 2:
+def _decode(raw):
+    """文字檔可能是 UTF-8（含 BOM）或 Big5；先試 UTF-8，不行再試 Big5（cp950）。"""
+    if not isinstance(raw, bytes):
+        return raw or ""
+    for enc in ("utf-8-sig", "cp950"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
             continue
+    return raw.decode("utf-8", "replace")
 
-        def pair(i):
-            b, s = buy[i], sell[i]
-            if not b or not s or b <= 0 or s <= 0:  # 0 或空＝沒報價
-                return None
-            return (b, s) if s >= b else None  # 賣出低於買入一定是欄位錯位
-        out[m.group(1)] = {"cash": pair(0), "spot": pair(1)}
+
+def _nums(tokens, i):
+    """從 tokens[i] 起連續的數字；回傳 (數字清單, 下一個位置)。"""
+    out = []
+    while i < len(tokens) and re.fullmatch(r"-?[\d,]*\.?\d+", tokens[i]):
+        out.append(num(tokens[i].replace(",", "")))
+        i += 1
+    return out, i
+
+
+def parse(text):
+    """回傳 {代號: {"cash": (買入, 賣出), "spot": (買入, 賣出)}}；沒有報價的欄位是 None。
+    用「詞」解析、不依賴換行與欄寬：看到含「買入」的詞，往前找最近的三個大寫字母當幣別，後面接數字；接著含「賣出」的詞再接數字。"""
+    toks = _decode(text).replace("\ufeff", " ").replace("\u3000", " ").split()
+    out, code = {}, None
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if re.fullmatch(r"[A-Z]{3}", t):
+            code = t
+        elif "買入" in t and code:
+            buy, k = _nums(toks, i + 1)
+            if k < len(toks) and "賣出" in toks[k]:
+                sell, k = _nums(toks, k + 1)
+                if len(buy) >= 2 and len(sell) >= 2:
+                    def pair(n):
+                        b, s_ = buy[n], sell[n]
+                        if not b or not s_ or b <= 0 or s_ <= 0:  # 0 或空＝沒報價
+                            return None
+                        return (b, s_) if s_ >= b else None  # 賣出低於買入一定是欄位錯位
+                    out[code] = {"cash": pair(0), "spot": pair(1)}
+                i = k - 1
+            code = None
+        i += 1
     return out
 
 
@@ -36,7 +65,8 @@ def fetch():
     raw = http_get(url("BOT_FX"))
     got = parse(raw)
     if not got:
-        raise SourceError("臺灣銀行牌告匯率：解析不到任何幣別（格式可能改了）")
+        head = _decode(raw)[:80].replace("\n", " ").replace("\r", " ")
+        raise SourceError("臺灣銀行牌告匯率解析不到幣別（收到 %d 位元組，開頭：%r）" % (len(raw), head))
     return got
 
 

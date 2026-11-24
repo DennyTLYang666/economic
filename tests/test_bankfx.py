@@ -36,6 +36,13 @@ class TestParse(unittest.TestCase):
         self.assertIsNone(q["USD"]["cash"])
         self.assertIsNone(q["USD"]["spot"])
 
+    def test_other_layouts(self):  # 版面不同也要能解析：全在一行、Big5 編碼、欄位標記帶前後綴
+        one = SAMPLE.replace("\n", " ")
+        self.assertEqual(bankfx.parse(one)["USD"]["spot"], (32.22, 32.37))
+        self.assertEqual(bankfx.parse(SAMPLE.encode("cp950", "replace").replace(b"\xef\xbb\xbf", b""))["USD"]["cash"], (31.895, 32.565))
+        alt = "美金 USD 現金買入 31.0 32.0 現金賣出 31.5 32.5\n"
+        self.assertEqual(bankfx.parse(alt)["USD"]["spot"], (32.0, 32.5))
+
     def test_garbage(self):
         self.assertEqual(bankfx.parse("<html>blocked</html>"), {})
         self.assertEqual(bankfx.parse(None), {})
