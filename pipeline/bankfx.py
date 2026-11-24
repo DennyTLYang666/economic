@@ -37,7 +37,7 @@ def _nums(tokens, i):
 def parse(text):
     """回傳 {代號: {"cash": (買入, 賣出), "spot": (買入, 賣出)}}；沒有報價的欄位是 None。
     用「詞」解析、不依賴換行與欄寬：看到含「買入」的詞，往前找最近的三個大寫字母當幣別，後面接數字；接著含「賣出」的詞再接數字。"""
-    toks = _decode(text).replace("\ufeff", " ").replace("\u3000", " ").split()
+    toks = _decode(text).replace("\ufeff", " ").replace("\u3000", " ").replace(",", " ").split()  # CSV 版（flcsv）每個幣別一行、逗號分隔，一併處理
     out, code = {}, None
     i = 0
     while i < len(toks):
@@ -61,13 +61,29 @@ def parse(text):
     return out
 
 
+def _peek(raw):
+    """收到的不是匯率檔時，回報它是什麼（標題與可見文字開頭），方便從 meta.json 直接判斷是被擋、導向還是改版。"""
+    t = _decode(raw)
+    m = re.search(r"<title[^>]*>(.*?)</title>", t, re.S | re.I)
+    body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", t, flags=re.S | re.I)
+    body = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", body)).strip()
+    return "%d 位元組；標題 %r；內文開頭 %r" % (len(raw), (m.group(1).strip()[:60] if m else None), body[:100])
+
+
 def fetch():
-    raw = http_get(url("BOT_FX"))
-    got = parse(raw)
-    if not got:
-        head = _decode(raw)[:80].replace("\n", " ").replace("\r", " ")
-        raise SourceError("臺灣銀行牌告匯率解析不到幣別（收到 %d 位元組，開頭：%r）" % (len(raw), head))
-    return got
+    """先抓文字檔（fltxt），解析不到再抓官方 CSV（flcsv，同一份資料）。兩個都失敗才報錯。"""
+    errs = []
+    for key in ("BOT_FX", "BOT_FX_CSV"):
+        try:
+            raw = http_get(url(key))
+        except SourceError as e:
+            errs.append(str(e))
+            continue
+        got = parse(raw)
+        if got:
+            return got
+        errs.append("%s 解析不到幣別（%s）" % (url(key).rsplit("/", 3)[-3], _peek(raw)))
+    raise SourceError("臺灣銀行牌告匯率：" + "｜".join(errs))
 
 
 def _mid(expr, last):

@@ -43,6 +43,19 @@ class TestParse(unittest.TestCase):
         alt = "美金 USD 現金買入 31.0 32.0 現金賣出 31.5 32.5\n"
         self.assertEqual(bankfx.parse(alt)["USD"]["spot"], (32.0, 32.5))
 
+    def test_csv_layout(self):  # 官方 CSV（flcsv）：每個幣別一行，欄位 0 幣別、1 標記、2 現金買入、3 即期買入…、11 標記、12 現金賣出、13 即期賣出
+        row = ["USD", "本行買入", "31.895", "32.22"] + ["32.2"] * 7 + ["本行賣出", "32.565", "32.37"] + ["32.3"] * 7
+        q = bankfx.parse("幣別,匯率,現金,即期\n" + ",".join(row) + "\n")
+        self.assertEqual(q["USD"]["cash"], (31.895, 32.565))
+        self.assertEqual(q["USD"]["spot"], (32.22, 32.37))
+
+    def test_block_page_is_reported_with_content(self):  # 被擋時 meta.json 要看得出收到什麼
+        html = b"<!DOCTYPE html><html><head><title>Access Denied</title></head><body><h1>Blocked</h1>Your IP is not allowed</body></html>"
+        self.assertEqual(bankfx.parse(html), {})
+        info = bankfx._peek(html)
+        self.assertIn("Access Denied", info)
+        self.assertIn("Your IP is not allowed", info)
+
     def test_garbage(self):
         self.assertEqual(bankfx.parse("<html>blocked</html>"), {})
         self.assertEqual(bankfx.parse(None), {})

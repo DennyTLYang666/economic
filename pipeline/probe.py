@@ -46,13 +46,19 @@ def taifex():
 
 
 def bot():
-    raw = http_get(url("BOT_FX"))
-    print("GET", url("BOT_FX"), "→", len(raw), "bytes")
-    print(raw[:500].decode("utf-8-sig", "replace"))
-    got = bankfx.parse(raw)
-    for code in ("USD", "JPY", "EUR"):
-        print(code, got.get(code, "沒有解析到"))
-    print("共解析到 %d 個幣別" % len(got))
+    for key in ("BOT_FX", "BOT_FX_CSV"):
+        print("--", key)
+        try:
+            raw = http_get(url(key))
+        except SourceError as e:
+            print("[失敗]", e)
+            continue
+        print("GET", url(key), "→", len(raw), "bytes")
+        print(raw[:500].decode("utf-8-sig", "replace"))
+        got = bankfx.parse(raw)
+        for code in ("USD", "JPY", "EUR"):
+            print(code, got.get(code, "沒有解析到"))
+        print("共解析到 %d 個幣別" % len(got), "｜", bankfx._peek(raw) if not got else "")
 
 
 if __name__ == "__main__":

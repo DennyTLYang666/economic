@@ -336,7 +336,7 @@ def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
             "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_POLYMARKET": base + "/poly", "ECO_URL_AI": base + "/ai",
-            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_BOT_FX": base + "/bot", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
+            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_BOT_FX": base + "/bot", "ECO_URL_BOT_FX_CSV": base + "/bot", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 
 if __name__ == "__main__":
