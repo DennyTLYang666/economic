@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import build, events, fetch, funds, news, newsfeed, ratesprob
+from . import build, chips, events, fetch, funds, news, newsfeed, outlook, ratesprob
 from .common import ROOT, TZ, SourceError, atomic_write, load_series, merge_bars, save_series, write_pair
 
 MIN_OK_RATIO = 0.5  # 報價成功的標的低於這個比例，視為整體失敗，不更新網站
@@ -102,6 +102,11 @@ def main(argv=None):
     sdir, out = root / "data" / "series", root / "data" / "site"
     daily, fred = load_series(sdir / "daily.csv", "close"), load_series(sdir / "fred.csv", "value")
     navs = load_series(sdir / "fund_nav.csv", "nav")
+    ocfg = read_json(root / "config" / "outlook.json") or {}
+    track = set(ocfg.get("track") or [])  # 要累積盤中最高／最低價的標的（預估成績單用）
+    hl = outlook.load_hl(sdir / "hl.csv") if track else {}
+    inst = chips.load_inst(sdir / "inst.csv")
+    night = read_json(sdir / "night_cache.json")
     now = datetime.now(TZ)
     today = now.date()
     # 先算出這次會做哪些階段，進度才能顯示「第 n／共 m 步」
@@ -109,7 +114,7 @@ def main(argv=None):
     plan_funds = not args.offline and args.funds != "no" and (args.funds == "yes" or args.mode == "daily" or not old_f)
     plan_news = not args.offline and args.news != "no" and (args.news == "yes" or args.mode == "daily" or not old_n or stale(old_n, NEWS_MAX_AGE, now))
     full = not args.offline and (args.mode == "daily" or not fred)
-    prog = Progress(2 + (0 if args.offline else 4) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
+    prog = Progress(2 + (0 if args.offline else 5) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
     status, problems = {}, []
     src = {"yahoo": {"ok": 0, "fail": 0, "errors": []}, "fred": {"ok": 0, "fail": 0, "errors": []},
            "calendar": {"ok": False, "error": None, "note": None}, "news": {"ok": None, "errors": 0},
@@ -128,6 +133,9 @@ def main(argv=None):
             prog.tick(k, s["id"])
             try:
                 bars, info, used = fetch.fetch_symbol(s, daily.get(s["id"], []), today)
+                hlmap = info.pop("hl", None)
+                if hlmap and s["id"] in track:
+                    hl.setdefault(s["id"], {}).update(hlmap)
                 daily[s["id"]] = merge_bars(daily.get(s["id"]), bars)
                 status[s["id"]] = dict(info, ok=True, symbol=used)
                 src["yahoo"]["ok"] += 1
@@ -168,6 +176,21 @@ def main(argv=None):
                 except Exception as e:  # 台灣總經是加分項，任何錯誤都不能拖垮整個更新
                     src["fred"]["fail"] += 1
                     src["fred"]["errors"].append("國發會景氣指標：%s（台灣總經沿用上次資料）" % str(e)[:140])
+        prog.stage("法人買賣超與夜盤")
+        try:
+            problems += chips.update_inst(inst, today, now, pause=args.pause)
+        except Exception as e:  # 籌碼是加分項：任何錯誤都不拖垮整個更新
+            problems.append("三大法人：%s" % str(e)[:140])
+        if args.mode == "daily" or 5 <= now.hour < 15:  # 夜盤收盤後（05:00）到下午才有新資料，其餘時間沿用快取
+            try:
+                got = chips.fetch_night()
+                if got:
+                    night = got
+                    atomic_write(sdir / "night_cache.json", json.dumps(got, ensure_ascii=False) + "\n")
+                elif args.mode == "daily" and today.weekday() < 5:
+                    problems.append("夜盤：期交所資料裡找不到台指期盤後時段（沿用上次）")
+            except Exception as e:
+                problems.append("夜盤：%s" % str(e)[:140])
         prog.stage("經濟日曆")
         try:
             auto_events, note = fetch.fetch_calendar()
@@ -207,6 +230,12 @@ def main(argv=None):
             problems.append("利率預期失敗，沿用上一版：%s" % str(e)[:140])
     prog.stage("整理成網站資料")
     docs = build.build_all(cfg, daily, fred, auto_events, manual, status, today, ccfg, feed_events, intl)
+    chips_doc = chips.build_chips(inst, daily.get("twii"), night, read_json(root / "config" / "chips.json"))
+    if chips_doc:
+        docs["chips"] = chips_doc
+    outlook_doc = outlook.build_outlook(ocfg, hl, today)
+    if outlook_doc:
+        docs["outlook"] = outlook_doc
 
     if rates_doc:
         docs["rates"] = rates_doc
@@ -292,6 +321,10 @@ def main(argv=None):
     save_series(sdir / "daily.csv", daily, "close")
     save_series(sdir / "fred.csv", fred, "value")
     save_series(sdir / "fund_nav.csv", navs, "nav")
+    if inst:
+        chips.save_inst(sdir / "inst.csv", inst)
+    if track:
+        outlook.save_hl(sdir / "hl.csv", hl)
 
     n_t = sum(len(g["tiles"]) for g in docs["overview"]["groups"])
     extra = ""

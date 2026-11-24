@@ -86,7 +86,29 @@ def yahoo_body(sym, rng_name, last_date):
     ts = [int(datetime(d.year, d.month, d.day, 12, tzinfo=timezone.utc).timestamp()) for d in days]
     return {"chart": {"result": [{"meta": {"gmtoffset": 0, "regularMarketPrice": px[-1], "regularMarketTime": ts[-1],
                                            "regularMarketDayHigh": px[-1] * 1.01, "regularMarketDayLow": px[-1] * 0.985},
-                                  "timestamp": ts, "indicators": {"quote": [{"close": px}]}}], "error": None}}
+                                  "timestamp": ts, "indicators": {"quote": [{"close": px, "high": [x * 1.01 for x in px], "low": [x * 0.985 for x in px]}]}}], "error": None}}
+
+
+def twse_body(d):
+    """假資料：外資每天賣超（−100 ～ −700 億，依日期變化），其餘固定。金額單位「元」，格式同證交所。"""
+    f = -(1 + d.toordinal() % 7) * 100
+    parts = [("自營商(自行買賣)", 8.4), ("自營商(避險)", -0.15), ("投信", 7.83), ("外資及陸資(不含外資自營商)", float(f))]
+    tot = sum(v for _, v in parts)
+    row = lambda n, v: [n, "{:,.0f}".format(abs(v) * 1e8 + 5e9), "{:,.0f}".format(5e9), "{:+,.0f}".format(v * 1e8)]
+    data = [row(n, v) for n, v in parts] + [row("外資自營商", -0.06), row("合計", tot)]
+    return {"stat": "OK", "date": d.strftime("%Y%m%d"), "title": "三大法人買賣金額統計表",
+            "fields": ["單位名稱", "買進金額", "賣出金額", "買賣差額"], "data": data}
+
+
+def taifex_rows(last_date):
+    nd = last_date + timedelta(days=1)
+    while nd.weekday() >= 5:
+        nd += timedelta(days=1)
+    mk = lambda c, month, sess, last: {"Date": nd.strftime("%Y%m%d"), "Contract": c, "ContractMonth(Week)": month, "Open": str(last - 20),
+                                       "High": str(last + 15), "Low": str(last - 30), "Last": str(last), "Change": "-120", "%": "-0.31",
+                                       "Volume": "88000", "SettlementPrice": "-", "TradingSession": sess}
+    return [mk("TX", "202611", "一般", 39700), mk("TX", "202611", "盤後", 39100), mk("TX", "202612", "盤後", 39050),
+            mk("TX", "202611/202612", "盤後", 50), mk("MTX", "202611", "盤後", 39099), mk("TX", "202612", "一般", 39650)]
 
 
 def fred_csv(sid, start):
@@ -215,6 +237,19 @@ class H(BaseHTTPRequestHandler):
             if body is None:
                 return self._send(404, json.dumps({"chart": {"result": None, "error": {"description": "No data"}}}))
             return self._send(200, json.dumps(body))
+        if u.path == "/twse":  # 三大法人買賣金額統計表（BFI82U 格式）；週末與 MOCK_LAST_DATE 之後沒有資料
+            day = (q.get("dayDate") or [""])[0]
+            try:
+                d = date(int(day[:4]), int(day[4:6]), int(day[6:]))
+            except ValueError:
+                return self._send(200, json.dumps({"stat": "查詢日期格式錯誤"}))
+            if os.environ.get("MOCK_TWSE_DOWN") == "1":
+                return self._send(500, "{}")
+            if d.weekday() >= 5 or d > last_date:
+                return self._send(200, json.dumps({"stat": "很抱歉，沒有符合條件的資料!"}))
+            return self._send(200, json.dumps(twse_body(d)))
+        if u.path == "/taifex":
+            return self._send(200, json.dumps(taifex_rows(last_date)))
         if u.path == "/fred":
             c = fred_csv((q.get("id") or [""])[0], (q.get("cosd") or [""])[0])
             return self._send(404, "not found") if c is None else self._send(200, c, "text/csv")
@@ -281,7 +316,7 @@ def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
             "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_POLYMARKET": base + "/poly", "ECO_URL_AI": base + "/ai",
-            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
+            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 
 if __name__ == "__main__":

@@ -38,12 +38,18 @@ def yahoo_bars(sym, rng):
     r = res[0]
     meta = r.get("meta") or {}
     off = meta.get("gmtoffset", 0) or 0
-    closes = (((r.get("indicators") or {}).get("quote") or [{}])[0]).get("close") or []
+    quote = ((r.get("indicators") or {}).get("quote") or [{}])[0]
+    closes = quote.get("close") or []
+    highs, lows = quote.get("high") or [], quote.get("low") or []
     ts = r.get("timestamp") or []
-    bars = []
-    for t, v in zip(ts, closes):
+    bars, hl = [], {}
+    for k, (t, v) in enumerate(zip(ts, closes)):
         if v is not None and v == v:
-            bars.append((datetime.fromtimestamp(t + off, timezone.utc).date(), float(v)))
+            d = datetime.fromtimestamp(t + off, timezone.utc).date()
+            bars.append((d, float(v)))
+            h, l = (highs[k] if k < len(highs) else None), (lows[k] if k < len(lows) else None)
+            if h is not None and l is not None and h == h and l == l:
+                hl[d] = (float(h), float(l))
     # 盤中最後一根有時 close 為空，改用即時價
     px, pt = meta.get("regularMarketPrice"), meta.get("regularMarketTime")
     if px is not None and pt:
@@ -55,7 +61,10 @@ def yahoo_bars(sym, rng):
     if not bars:
         raise SourceError("%s 沒有可用收盤價" % sym)
     info = {"day_high": meta.get("regularMarketDayHigh"), "day_low": meta.get("regularMarketDayLow"),
-            "market_time": datetime.fromtimestamp(pt, TZ).isoformat(timespec="minutes") if pt else None}
+            "market_time": datetime.fromtimestamp(pt, TZ).isoformat(timespec="minutes") if pt else None, "hl": hl}
+    # 最新一天用即時的日高低（日線最後一根盤中常常還沒更新）
+    if px is not None and pt and info["day_high"] is not None and info["day_low"] is not None:
+        hl[datetime.fromtimestamp(pt + off, timezone.utc).date()] = (float(info["day_high"]), float(info["day_low"]))
     return bars, info
 
 
