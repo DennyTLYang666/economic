@@ -1,0 +1,14 @@
+{
+ "_說明": "銀行牌告匯率（臺灣銀行）。換外幣＝你向銀行買外幣＝看「本行賣出」：換現鈔看現金賣出，匯款或帳戶換匯看即期賣出。currencies 依序顯示；mid＝用來算『和市場中間價差多少』的算式（symbols.json 的標的 id，前面加 / 表示除；沒有就不顯示價差）：美元／新台幣＝usdtwd，日圓＝usdtwd ÷ usdjpy。dec＝顯示小數位數。牌告是每 1 單位外幣兌新台幣（日圓、韓元也是 1 單位，所以數字很小）。",
+ "currencies": [
+  {"code": "USD", "name": "美元", "dec": 3, "mid": ["usdtwd"]},
+  {"code": "JPY", "name": "日圓", "dec": 4, "mid": ["usdtwd", "/usdjpy"]},
+  {"code": "EUR", "name": "歐元", "dec": 3, "mid": ["usdtwd", "eurusd"]},
+  {"code": "CNY", "name": "人民幣", "dec": 3, "mid": ["usdtwd", "/usdcny"]},
+  {"code": "AUD", "name": "澳幣", "dec": 3, "mid": ["usdtwd", "audusd"]},
+  {"code": "HKD", "name": "港幣", "dec": 3, "mid": ["usdtwd", "/usdhkd"]},
+  {"code": "GBP", "name": "英鎊", "dec": 3, "mid": ["usdtwd", "gbpusd"]},
+  {"code": "KRW", "name": "韓元", "dec": 4, "mid": ["usdtwd", "/usdkrw"]},
+  {"code": "SGD", "name": "新加坡幣", "dec": 3, "mid": ["usdtwd", "/usdsgd"]}
+ ]
+}

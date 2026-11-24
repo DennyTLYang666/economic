@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import build, chips, events, fetch, funds, news, newsfeed, outlook, ratesprob
+from . import bankfx, build, chips, events, fetch, funds, news, newsfeed, outlook, ratesprob
 from .common import ROOT, TZ, SourceError, atomic_write, load_series, merge_bars, save_series, write_pair
 
 MIN_OK_RATIO = 0.5  # 報價成功的標的低於這個比例，視為整體失敗，不更新網站
@@ -107,6 +107,8 @@ def main(argv=None):
     hl = outlook.load_hl(sdir / "hl.csv") if track else {}
     inst = chips.load_inst(sdir / "inst.csv")
     night = read_json(sdir / "night_cache.json")
+    bcfg = read_json(root / "config" / "bankfx.json") or {}
+    bank_doc = None
     now = datetime.now(TZ)
     today = now.date()
     # 先算出這次會做哪些階段，進度才能顯示「第 n／共 m 步」
@@ -114,7 +116,7 @@ def main(argv=None):
     plan_funds = not args.offline and args.funds != "no" and (args.funds == "yes" or args.mode == "daily" or not old_f)
     plan_news = not args.offline and args.news != "no" and (args.news == "yes" or args.mode == "daily" or not old_n or stale(old_n, NEWS_MAX_AGE, now))
     full = not args.offline and (args.mode == "daily" or not fred)
-    prog = Progress(2 + (0 if args.offline else 5) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
+    prog = Progress(2 + (0 if args.offline else 6) + (1 if full else 0) + int(plan_funds) + 2 * int(plan_news))
     status, problems = {}, []
     src = {"yahoo": {"ok": 0, "fail": 0, "errors": []}, "fred": {"ok": 0, "fail": 0, "errors": []},
            "calendar": {"ok": False, "error": None, "note": None}, "news": {"ok": None, "errors": 0},
@@ -228,11 +230,24 @@ def main(argv=None):
         except (SourceError, ValueError, KeyError, TypeError, OSError) as e:
             src["rates"] = {"ok": False}
             problems.append("利率預期失敗，沿用上一版：%s" % str(e)[:140])
+    if not args.offline and bcfg.get("currencies"):
+        prog.stage("銀行牌告匯率（臺灣銀行）")
+        try:  # 加值資料：失敗就沿用上一次抓到的（存在 data/series/bankfx_cache.json），不影響其他資料
+            bank_doc, bwarn = bankfx.build(bcfg, bankfx.fetch(), daily, now)
+            atomic_write(sdir / "bankfx_cache.json", json.dumps(bank_doc, ensure_ascii=False) + "\n")
+            problems += bwarn
+        except (SourceError, ValueError, KeyError, TypeError, OSError) as e:
+            problems.append("銀行牌告匯率失敗，沿用上次：%s" % str(e)[:140])
+            bank_doc = read_json(sdir / "bankfx_cache.json")
+    elif bcfg.get("currencies"):
+        bank_doc = read_json(sdir / "bankfx_cache.json")
     prog.stage("整理成網站資料")
     docs = build.build_all(cfg, daily, fred, auto_events, manual, status, today, ccfg, feed_events, intl)
     chips_doc = chips.build_chips(inst, daily.get("twii"), night, read_json(root / "config" / "chips.json"))
     if chips_doc:
         docs["chips"] = chips_doc
+    if bank_doc:
+        docs["bankfx"] = bank_doc
     outlook_doc = outlook.build_outlook(ocfg, hl, today)
     if outlook_doc:
         docs["outlook"] = outlook_doc

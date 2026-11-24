@@ -237,6 +237,26 @@ class H(BaseHTTPRequestHandler):
             if body is None:
                 return self._send(404, json.dumps({"chart": {"result": None, "error": {"description": "No data"}}}))
             return self._send(200, json.dumps(body))
+        if u.path == "/bot":  # 臺灣銀行牌告匯率 fltxt：每幣別兩行（買入／賣出），每行 現金 即期 遠期×7；MOCK_BOT_DOWN=1 模擬失敗
+            if os.environ.get("MOCK_BOT_DOWN") == "1":
+                return self._send(500, "{}")
+            z = "0.00000"
+            tw = LAST["TWD=X"][0]  # 各幣別的牌告用「市場中間價 ±1%」產生，和 config/bankfx.json 的 mid 算式對得上
+            mids = {"USD": tw, "JPY": tw / LAST["JPY=X"][0], "EUR": tw * LAST["EURUSD=X"][0], "CNY": tw / LAST["CNY=X"][0], "AUD": tw * LAST["AUDUSD=X"][0],
+                    "HKD": tw / LAST["HKD=X"][0], "GBP": tw * LAST["GBPUSD=X"][0], "KRW": tw / LAST["KRW=X"][0], "SGD": tw / LAST["SGD=X"][0]}
+            rows = []
+            for code, m in mids.items():
+                rows.append((code, (m * 0.99, m * 0.995), (m * 1.01, m * 1.005)))  # (買入 現金, 即期), (賣出 現金, 即期)
+            rows[0] = ("USD", (32.500, 32.800), (33.200, 32.950))  # 美元用固定值，測試好對
+            rows = [r for r in rows if r[0] != "KRW"] + [("KRW", (0.0, mids["KRW"] * 0.995), (0.0, mids["KRW"] * 1.005))]  # 韓元現鈔沒報價
+            if os.environ.get("MOCK_BOT_BAD") == "1":
+                rows = [r for r in rows if r[0] != "AUD"] + [("AUD", (30.0, 29.0), (28.0, 27.0))]  # 賣出低於買入、離市場價很遠：應被丟棄
+            head = "幣別 匯率 現金 即期 遠期10天 遠期30天 遠期60天 遠期90天 遠期120天 遠期150天 遠期180天 匯率 現金 即期 遠期10天 遠期30天 遠期60天 遠期90天 遠期120天 遠期150天 遠期180天\n"
+            body = head
+            for code, b, sl in rows:
+                f = lambda v: ("%.5f" % v) if v else z
+                body += "%s 本行買入 %s %s %s\n      本行賣出 %s %s %s\n" % (code, f(b[0]), f(b[1]), " ".join([f(b[1])] * 7), f(sl[0]), f(sl[1]), " ".join([f(sl[1])] * 7))
+            return self._send(200, "\ufeff" + body, "text/plain; charset=utf-8")
         if u.path == "/twse":  # 三大法人買賣金額統計表（BFI82U 格式）；週末與 MOCK_LAST_DATE 之後沒有資料
             day = (q.get("dayDate") or [""])[0]
             try:
@@ -316,7 +336,7 @@ def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
             "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_POLYMARKET": base + "/poly", "ECO_URL_AI": base + "/ai",
-            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
+            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_BOT_FX": base + "/bot", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 
 if __name__ == "__main__":
