@@ -30,6 +30,11 @@ class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         shutil.copytree(REPO / "config", self.tmp / "config")
+        bp = self.tmp / "config" / "bankfx.json"  # 正式設定 remote=false（Actions 不抓）；一般測試走「自己抓」的路徑，remote=false 另有專門測試
+        if bp.exists():
+            bc = json.loads(bp.read_text(encoding="utf-8"))
+            bc["remote"] = True
+            bp.write_text(json.dumps(bc, ensure_ascii=False), encoding="utf-8")
         (self.tmp / "data" / "series").mkdir(parents=True)  # 每個測試從空歷史開始，不受 repo 內資料影響
         self._saved = dict(os.environ)
         os.environ.update(self.env)

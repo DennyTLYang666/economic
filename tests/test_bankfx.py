@@ -99,6 +99,16 @@ class TestBuild(unittest.TestCase):
 
 
 class TestEndToEnd(Base):
+    def setUp(self):
+        super().setUp()
+        self.set_remote(True)  # 正式設定是 remote=false（Actions 不抓）；這裡測「由更新流程自己抓」的路徑
+
+    def set_remote(self, flag):
+        p = self.tmp / "config" / "bankfx.json"
+        c = json.loads(p.read_text(encoding="utf-8"))
+        c["remote"] = flag
+        p.write_text(json.dumps(c, ensure_ascii=False), encoding="utf-8")
+
     def test_falls_back_to_text_file_when_page_is_challenged(self):  # 網頁被擋（驗證頁）→ 改抓文字檔，資料一樣，只是沒有掛牌時間
         os.environ["MOCK_BOT_HTML_DOWN"] = "1"
         try:
@@ -132,6 +142,58 @@ class TestEndToEnd(Base):
         finally:
             os.environ.pop("MOCK_BOT_DOWN", None)
         self.assertEqual([i["code"] for i in self.doc("bankfx")["items"]][:2], ["USD", "JPY"])  # 沿用上次
+
+    def test_remote_false_reads_cache_only(self):  # Actions 不抓：沒有檔案要提醒，有檔案就發布，太舊要提醒
+        self.set_remote(False)
+        self.assertEqual(self.go("--mode", "daily"), 2)
+        self.assertTrue(any("sync_bankfx" in p for p in self.doc("meta")["problems"]))
+        self.assertFalse((self.tmp / "data" / "site" / "bankfx.json").exists())
+        cache = self.tmp / "data" / "series" / "bankfx_cache.json"
+        bank, _ = bankfx.build(json.loads((self.tmp / "config" / "bankfx.json").read_text(encoding="utf-8")),
+                               bankfx.parse(SAMPLE), {}, datetime.now(TZ), "2026-11-26T10:01:00+08:00")
+        cache.write_text(json.dumps(bank, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(self.go("--mode", "daily"), 0)  # 沒有再打網路也成功
+        self.assertEqual(self.doc("bankfx")["quoted_at"], "2026-11-26T10:01:00+08:00")
+        old = dict(bank, updated="2026-11-01T10:00:00+08:00")
+        cache.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(self.go("--mode", "daily"), 2)
+        self.assertTrue(any("沒更新" in p for p in self.doc("meta")["problems"]))
+
+
+class TestSyncLocal(Base):
+    def test_sync_pushes_only_when_changed(self):
+        import subprocess
+        import tempfile
+        from pipeline import sync_bankfx
+        root = Path(tempfile.mkdtemp())
+        git = lambda *a, cwd=None: subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True)
+        git("init", "--bare", "-b", "main", str(root / "remote.git"))
+        git("clone", str(root / "remote.git"), str(root / "work"))
+        work = root / "work"
+        git("config", "user.email", "t@example.com", cwd=work)
+        git("config", "user.name", "t", cwd=work)
+        (work / "config").mkdir()
+        shutil_copy = __import__("shutil").copy
+        shutil_copy(Path(__file__).resolve().parent.parent / "config" / "bankfx.json", work / "config" / "bankfx.json")
+        (work / "README").write_text("x", encoding="utf-8")
+        git("add", "-A", cwd=work)
+        git("commit", "-m", "init", cwd=work)
+        git("push", "-u", "origin", "main", cwd=work)
+        self.assertEqual(sync_bankfx.main(["--repo", str(work), "--push"]), 0)
+        cache = work / "data" / "series" / "bankfx_cache.json"
+        self.assertEqual(json.loads(cache.read_text(encoding="utf-8"))["items"][0]["cash"]["sell"], 33.2)
+        n1 = git("rev-list", "--count", "main", cwd=work).stdout.strip()
+        self.assertEqual(sync_bankfx.main(["--repo", str(work), "--push"]), 0)  # 價格與掛牌時間都沒變 → 不再 commit
+        self.assertEqual(git("rev-list", "--count", "main", cwd=work).stdout.strip(), n1)
+        self.assertEqual(git("rev-list", "--count", "origin/main", cwd=work).stdout.strip(), n1)  # 已推上去
+        os.environ["MOCK_BOT_HTML_DOWN"] = "1"
+        os.environ["MOCK_BOT_DOWN"] = "1"  # 全部被擋：回傳失敗碼，不動檔案
+        try:
+            self.assertEqual(sync_bankfx.main(["--repo", str(work), "--push"]), 1)
+        finally:
+            os.environ.pop("MOCK_BOT_HTML_DOWN", None)
+            os.environ.pop("MOCK_BOT_DOWN", None)
+        __import__("shutil").rmtree(root, ignore_errors=True)
 
 
 if __name__ == "__main__":
