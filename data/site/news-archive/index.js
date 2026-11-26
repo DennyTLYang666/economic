@@ -1,1 +1,1 @@
-window.ECO_JSONP&&window.ECO_JSONP("data/site/news-archive/index.json",{"updated":"2026-11-26T10:57:36+08:00","months":[{"m":"2026-11","n":509,"hot":14},{"m":"2026-10","n":8,"hot":0}]});
+window.ECO_JSONP&&window.ECO_JSONP("data/site/news-archive/index.json",{"updated":"2026-11-26T11:33:13+08:00","months":[{"m":"2026-11","n":534,"hot":15},{"m":"2026-10","n":8,"hot":0}]});
