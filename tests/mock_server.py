@@ -216,6 +216,23 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(n).decode("utf-8") if n else ""
+        if self.path.split("?")[0] == "/esun":  # 玉山牌告匯率資料介面（POST，回 JSON）；MOCK_ESUN_DOWN=1 模擬被擋（回網頁）、MOCK_ESUN_BAD=1 放一筆賣出低於買入
+            if os.environ.get("MOCK_ESUN_DOWN") == "1":
+                return self._send(200, "<!DOCTYPE html><html><head><title>Challenge Validation</title></head><body>Challenge Validation</body></html>", "text/html; charset=utf-8")
+            tw = LAST["TWD=X"][0]  # 各幣別牌告用「市場中間價」上下浮動產生，和 config/bankfx.json 的 mid 算式對得上
+            mids = {"USD": tw, "JPY": tw / LAST["JPY=X"][0], "EUR": tw * LAST["EURUSD=X"][0], "CNY": tw / LAST["CNY=X"][0], "AUD": tw * LAST["AUDUSD=X"][0],
+                    "HKD": tw / LAST["HKD=X"][0], "GBP": tw * LAST["GBPUSD=X"][0], "SGD": tw / LAST["SGD=X"][0], "CAD": tw / LAST["CAD=X"][0]}
+            nm = {"USD": "美元", "JPY": "日圓", "EUR": "歐元", "CNY": "人民幣", "AUD": "澳幣", "HKD": "港幣", "GBP": "英鎊", "SGD": "新加坡幣", "CAD": "加拿大幣"}
+            rows = []
+            for code, m in mids.items():
+                r = lambda x: ("%.4f" % x)
+                rows.append({"Name": nm[code], "BBoardRate": round(m * 0.997, 4), "SBoardRate": round(m * 1.003, 4), "CashBBoardRate": r(m * 0.992) if code != "SGD" else "",
+                             "CashSBoardRate": r(m * 1.008) if code != "SGD" else "", "BuyIncreaseRate": r(m * 0.999), "SellDecreaseRate": r(m * 1.001) if code != "CAD" else "-",
+                             "UpdateTime": "/Date(1795663520000)/", "CCY": code + "/TWD", "Key": nm[code]})
+            rows[0].update({"BBoardRate": 32.94, "SBoardRate": 33.04, "CashBBoardRate": "32.69", "CashSBoardRate": "33.24", "BuyIncreaseRate": "32.971", "SellDecreaseRate": "33.009"})  # 美元用固定值，測試好對
+            if os.environ.get("MOCK_ESUN_BAD") == "1":
+                rows = [x for x in rows if x["CCY"] != "AUD/TWD"] + [{"Name": "澳幣", "BBoardRate": 30.0, "SBoardRate": 29.0, "CashBBoardRate": "", "CashSBoardRate": "", "BuyIncreaseRate": "", "SellDecreaseRate": "", "UpdateTime": "/Date(1795663520000)/", "CCY": "AUD/TWD"}]
+            return self._send(200, json.dumps({"DiscontFlag": "T", "Rates": rows, "Time": ["00:00:00"]}, ensure_ascii=False))
         if self.path.split("?")[0] == "/ai":
             if os.environ.get("MOCK_AI_FAIL") == "1" or self.headers.get("x-api-key") != "test-key":
                 return self._send(401, "{}")
@@ -237,39 +254,6 @@ class H(BaseHTTPRequestHandler):
             if body is None:
                 return self._send(404, json.dumps({"chart": {"result": None, "error": {"description": "No data"}}}))
             return self._send(200, json.dumps(body))
-        if u.path in ("/bot", "/bot_html"):  # 臺灣銀行牌告匯率 fltxt：每幣別兩行（買入／賣出），每行 現金 即期 遠期×7；MOCK_BOT_DOWN=1 模擬失敗
-            if os.environ.get("MOCK_BOT_DOWN") == "1":
-                return self._send(500, "{}")
-            z = "0.00000"
-            tw = LAST["TWD=X"][0]  # 各幣別的牌告用「市場中間價 ±1%」產生，和 config/bankfx.json 的 mid 算式對得上
-            mids = {"USD": tw, "JPY": tw / LAST["JPY=X"][0], "EUR": tw * LAST["EURUSD=X"][0], "CNY": tw / LAST["CNY=X"][0], "AUD": tw * LAST["AUDUSD=X"][0],
-                    "HKD": tw / LAST["HKD=X"][0], "GBP": tw * LAST["GBPUSD=X"][0], "KRW": tw / LAST["KRW=X"][0], "SGD": tw / LAST["SGD=X"][0]}
-            rows = []
-            for code, m in mids.items():
-                rows.append((code, (m * 0.99, m * 0.995), (m * 1.01, m * 1.005)))  # (買入 現金, 即期), (賣出 現金, 即期)
-            rows[0] = ("USD", (32.500, 32.800), (33.200, 32.950))  # 美元用固定值，測試好對
-            rows = [r for r in rows if r[0] != "KRW"] + [("KRW", (0.0, mids["KRW"] * 0.995), (0.0, mids["KRW"] * 1.005))]  # 韓元現鈔沒報價
-            if os.environ.get("MOCK_BOT_BAD") == "1":
-                rows = [r for r in rows if r[0] != "AUD"] + [("AUD", (30.0, 29.0), (28.0, 27.0))]  # 賣出低於買入、離市場價很遠：應被丟棄
-            if u.path == "/bot_html":
-                if os.environ.get("MOCK_BOT_HTML_DOWN") == "1":  # 模擬被擋：回「Challenge Validation」驗證頁
-                    return self._send(200, "<!DOCTYPE html><html><head><title>Challenge Validation</title></head><body>Challenge Validation</body></html>", "text/html; charset=utf-8")
-                names = {"USD": "美金", "JPY": "日圓", "EUR": "歐元", "CNY": "人民幣", "AUD": "澳幣", "HKD": "港幣", "GBP": "英鎊", "KRW": "韓元", "SGD": "新加坡幣", "AUDX": ""}
-                g = lambda v: ("%.4f" % v) if v else "-"
-                trs = ""
-                for code, b, sl in rows:
-                    cells = "<td>%s</td><td>%s</td><td>%s</td><td>%s</td>" % (g(b[0]), g(sl[0]), g(b[1]), g(sl[1]))
-                    trs += ('<tr><td><div class="visible-phone print_hide">%s (%s)</div><div class="hidden-phone print_show">%s (%s)</div></td>%s'
-                            '<td><a href="/fwd">查詢</a></td><td><a href="/hist">查詢</a></td>%s</tr>' % (names.get(code, code), code, names.get(code, code), code, cells, cells))
-                page = ('<html><head><title>臺灣銀行牌告匯率</title><script>var x=1;</script></head><body><h1>2026/11/26 本行營業時間牌告匯率</h1>'
-                        '<p>牌價最新掛牌時間：2026/11/26 10:01</p><table><thead><tr><th>幣別</th><th>本行買入</th><th>本行賣出</th></tr></thead><tbody>%s</tbody></table></body></html>' % trs)
-                return self._send(200, page, "text/html; charset=utf-8")
-            head = "幣別 匯率 現金 即期 遠期10天 遠期30天 遠期60天 遠期90天 遠期120天 遠期150天 遠期180天 匯率 現金 即期 遠期10天 遠期30天 遠期60天 遠期90天 遠期120天 遠期150天 遠期180天\n"
-            body = head
-            for code, b, sl in rows:
-                f = lambda v: ("%.5f" % v) if v else z
-                body += "%s 本行買入 %s %s %s\n      本行賣出 %s %s %s\n" % (code, f(b[0]), f(b[1]), " ".join([f(b[1])] * 7), f(sl[0]), f(sl[1]), " ".join([f(sl[1])] * 7))
-            return self._send(200, "\ufeff" + body, "text/plain; charset=utf-8")
         if u.path == "/twse":  # 三大法人買賣金額統計表（BFI82U 格式）；週末與 MOCK_LAST_DATE 之後沒有資料
             day = (q.get("dayDate") or [""])[0]
             try:
@@ -349,7 +333,7 @@ def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
             "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_POLYMARKET": base + "/poly", "ECO_URL_AI": base + "/ai",
-            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_BOT_FX_HTML": base + "/bot_html", "ECO_URL_BOT_FX": base + "/bot", "ECO_URL_BOT_FX_CSV": base + "/bot", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
+            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_ESUN_FX": base + "/esun", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 
 if __name__ == "__main__":

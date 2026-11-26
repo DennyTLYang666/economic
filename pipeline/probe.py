@@ -45,22 +45,16 @@ def taifex():
     print("夜盤解析結果：", n if n else "沒有找到台指期盤後時段（開放資料可能不含盤後，或欄位名稱不同）")
 
 
-def bot():
-    for key in ("BOT_FX_HTML", "BOT_FX", "BOT_FX_CSV"):
-        print("--", key)
-        try:
-            raw = http_get(url(key))
-        except SourceError as e:
-            print("[失敗]", e)
-            continue
-        print("GET", url(key), "→", len(raw), "bytes")
-        print(raw[:500].decode("utf-8-sig", "replace"))
-        got, when = bankfx.parse_html(raw) if key == "BOT_FX_HTML" else (bankfx.parse(raw), None)
-        if when:
-            print("掛牌時間：", when)
-        for code in ("USD", "JPY", "EUR"):
-            print(code, got.get(code, "沒有解析到"))
-        print("共解析到 %d 個幣別" % len(got), "｜", bankfx._peek(raw) if not got else "")
+def esun():
+    raw = http_get(url("ESUN_FX"), post=True)
+    print("POST", url("ESUN_FX"), "→", len(raw), "bytes")
+    print(raw[:300].decode("utf-8", "replace"))
+    got, when = bankfx.parse(raw)
+    if when:
+        print("玉山更新時間：", when)
+    for code in ("USD", "JPY", "EUR"):
+        print(code, got.get(code, "沒有解析到"))
+    print("共解析到 %d 個幣別" % len(got), "｜", bankfx._peek(raw) if not got else "")
 
 
 if __name__ == "__main__":
@@ -68,4 +62,4 @@ if __name__ == "__main__":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     show("證交所：三大法人買賣金額統計表（BFI82U）", twse)
     show("期交所：期貨每日交易行情（夜盤）", taifex)
-    show("臺灣銀行：牌告匯率（現金／即期 買入賣出）", bot)
+    show("玉山銀行：牌告匯率（現金／即期／網銀優惠）", esun)

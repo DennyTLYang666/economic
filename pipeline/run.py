@@ -109,6 +109,8 @@ def main(argv=None):
     night = read_json(sdir / "night_cache.json")
     bcfg = read_json(root / "config" / "bankfx.json") or bankfx.DEFAULT
     bank_doc = None
+    if bcfg.get("enabled") is False:
+        bcfg = {}  # enabled=false：整段略過（不抓、不警告、網站不顯示卡片）
     now = datetime.now(TZ)
     today = now.date()
     # 先算出這次會做哪些階段，進度才能顯示「第 n／共 m 步」
@@ -230,8 +232,8 @@ def main(argv=None):
         except (SourceError, ValueError, KeyError, TypeError, OSError) as e:
             src["rates"] = {"ok": False}
             problems.append("利率預期失敗，沿用上一版：%s" % str(e)[:140])
-    if not args.offline and bcfg.get("currencies") and bcfg.get("remote", True):
-        prog.stage("銀行牌告匯率（臺灣銀行）")
+    if not args.offline and bcfg.get("currencies"):
+        prog.stage("銀行牌告匯率（玉山）")
         try:  # 加值資料：失敗就沿用上一次抓到的（存在 data/series/bankfx_cache.json），不影響其他資料
             bq, bwhen = bankfx.fetch()
             bank_doc, bwarn = bankfx.build(bcfg, bq, daily, now, bwhen)
@@ -241,19 +243,7 @@ def main(argv=None):
             problems.append("銀行牌告匯率失敗，沿用上次：%s" % str(e)[:300])
             bank_doc = read_json(sdir / "bankfx_cache.json")
     elif bcfg.get("currencies"):
-        # remote=false：臺灣銀行擋 GitHub 的機器，改由本機（python -m pipeline.sync_bankfx --push）抓好推上來，這裡只讀檔
         bank_doc = read_json(sdir / "bankfx_cache.json")
-        if args.offline:
-            pass
-        elif not bank_doc:
-            problems.append("銀行牌告匯率：還沒有資料（請在自己的電腦執行 sync_bankfx.bat 抓一次並推上來）")
-        else:
-            try:
-                age = (now - datetime.fromisoformat(bank_doc["updated"])).total_seconds() / 86400
-            except (KeyError, ValueError, TypeError):
-                age = 99
-            if age > 3:
-                problems.append("銀行牌告匯率：本機同步已 %d 天沒更新（電腦沒開機或排程停了？）" % int(age))
     prog.stage("整理成網站資料")
     docs = build.build_all(cfg, daily, fred, auto_events, manual, status, today, ccfg, feed_events, intl)
     chips_doc = chips.build_chips(inst, daily.get("twii"), night, read_json(root / "config" / "chips.json"))

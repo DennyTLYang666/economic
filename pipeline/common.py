@@ -23,9 +23,7 @@ URLS = {
     "POLYMARKET": "https://gamma-api.polymarket.com/events",
     "AI": "https://api.anthropic.com/v1/messages",
     "NDC_META": "https://data.gov.tw/api/v2/rest/dataset/6099",
-    "BOT_FX_HTML": "https://rate.bot.com.tw/xrt?Lang=zh-TW",
-    "BOT_FX": "https://rate.bot.com.tw/xrt/fltxt/0/day",
-    "BOT_FX_CSV": "https://rate.bot.com.tw/xrt/flcsv/0/day",
+    "ESUN_FX": "https://www.esunbank.com/api/client/ExchangeRate/LastRateInfo?sc_lang=zh-TW",
     "TWSE_INST": "https://www.twse.com.tw/rwd/zh/fund/BFI82U",
     "TAIFEX_FUT": "https://openapi.taifex.com.tw/v1/DailyMarketReportFut",
     "FUND_TLIFE": "https://178.taiwanlife.com/w/djjson/CtbclifeSearchJSONNEW.djjson?P1=ctbclife&P2=False&P3=False&P4=0&P5=0&",
@@ -42,13 +40,13 @@ def url(name):
     return os.environ.get("ECO_URL_" + name, URLS[name])
 
 
-def http_get(u, retries=2, timeout=25, backoff=None):
+def http_get(u, retries=2, timeout=25, backoff=None, post=False):  # post=True：送空的 POST（玉山牌告的資料介面只收 POST）
     if backoff is None:
         backoff = float(os.environ.get("ECO_BACKOFF", "2.0"))  # 測試時設 0
     last = None
     for i in range(retries + 1):
         try:
-            req = urllib.request.Request(u, headers={"User-Agent": UA, "Accept": "*/*"})
+            req = urllib.request.Request(u, data=(b"" if post else None), method=("POST" if post else "GET"), headers={"User-Agent": UA, "Accept": "*/*"})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read()
         except urllib.error.HTTPError as e:

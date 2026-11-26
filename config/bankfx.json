@@ -1,15 +1,77 @@
 {
- "remote": false,
- "_說明": "銀行牌告匯率（臺灣銀行）。換外幣＝你向銀行買外幣＝看「本行賣出」：換現鈔看現金賣出，匯款或帳戶換匯看即期賣出。currencies 依序顯示；mid＝用來算『和市場中間價差多少』的算式（symbols.json 的標的 id，前面加 / 表示除；沒有就不顯示價差）：美元／新台幣＝usdtwd，日圓＝usdtwd ÷ usdjpy。dec＝顯示小數位數。remote：false＝GitHub 上的更新不自己抓（臺灣銀行對 GitHub 機器回機器人驗證頁），只讀 data/series/bankfx_cache.json；這個檔由你自己的電腦執行 sync_bankfx.bat（python -m pipeline.sync_bankfx --push）抓好推上來；true＝由更新流程自己抓。牌告是每 1 單位外幣兌新台幣（日圓、韓元也是 1 單位，所以數字很小）。",
+ "_說明": "銀行牌告匯率（玉山銀行；2026-11-26 臺灣銀行對程式請求回機器人驗證頁，改用玉山）。換外幣＝你向銀行買外幣＝看「賣出價」：換現鈔看現金賣出，匯款或帳戶換匯看即期賣出，用網銀／App 換匯看「網銀優惠」賣出（玉山在即期上加減碼，通常最划算）。currencies 依序顯示；mid＝用來算『賣出價比市場價貴幾 %』的算式（symbols.json 的標的 id，前面加 / 表示除；沒有就不顯示價差）：美元／新台幣＝usdtwd，日圓＝usdtwd ÷ usdjpy。dec＝顯示小數位數。牌告是每 1 單位外幣兌新台幣（日圓是 1 單位，所以數字很小）。玉山沒有韓元。enabled=false 可整個關閉。",
+ "enabled": true,
  "currencies": [
-  {"code": "USD", "name": "美元", "dec": 3, "mid": ["usdtwd"]},
-  {"code": "JPY", "name": "日圓", "dec": 4, "mid": ["usdtwd", "/usdjpy"]},
-  {"code": "EUR", "name": "歐元", "dec": 3, "mid": ["usdtwd", "eurusd"]},
-  {"code": "CNY", "name": "人民幣", "dec": 3, "mid": ["usdtwd", "/usdcny"]},
-  {"code": "AUD", "name": "澳幣", "dec": 3, "mid": ["usdtwd", "audusd"]},
-  {"code": "HKD", "name": "港幣", "dec": 3, "mid": ["usdtwd", "/usdhkd"]},
-  {"code": "GBP", "name": "英鎊", "dec": 3, "mid": ["usdtwd", "gbpusd"]},
-  {"code": "KRW", "name": "韓元", "dec": 4, "mid": ["usdtwd", "/usdkrw"]},
-  {"code": "SGD", "name": "新加坡幣", "dec": 3, "mid": ["usdtwd", "/usdsgd"]}
+  {
+   "code": "USD",
+   "name": "美元",
+   "dec": 3,
+   "mid": [
+    "usdtwd"
+   ]
+  },
+  {
+   "code": "JPY",
+   "name": "日圓",
+   "dec": 4,
+   "mid": [
+    "usdtwd",
+    "/usdjpy"
+   ]
+  },
+  {
+   "code": "EUR",
+   "name": "歐元",
+   "dec": 3,
+   "mid": [
+    "usdtwd",
+    "eurusd"
+   ]
+  },
+  {
+   "code": "CNY",
+   "name": "人民幣",
+   "dec": 3,
+   "mid": [
+    "usdtwd",
+    "/usdcny"
+   ]
+  },
+  {
+   "code": "AUD",
+   "name": "澳幣",
+   "dec": 3,
+   "mid": [
+    "usdtwd",
+    "audusd"
+   ]
+  },
+  {
+   "code": "HKD",
+   "name": "港幣",
+   "dec": 3,
+   "mid": [
+    "usdtwd",
+    "/usdhkd"
+   ]
+  },
+  {
+   "code": "GBP",
+   "name": "英鎊",
+   "dec": 3,
+   "mid": [
+    "usdtwd",
+    "gbpusd"
+   ]
+  },
+  {
+   "code": "SGD",
+   "name": "新加坡幣",
+   "dec": 3,
+   "mid": [
+    "usdtwd",
+    "/usdsgd"
+   ]
+  }
  ]
 }
