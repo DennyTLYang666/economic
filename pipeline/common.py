@@ -23,6 +23,7 @@ URLS = {
     "POLYMARKET": "https://gamma-api.polymarket.com/events",
     "AI": "https://api.anthropic.com/v1/messages",
     "NDC_META": "https://data.gov.tw/api/v2/rest/dataset/6099",
+    "BOT_FX_HTML": "https://rate.bot.com.tw/xrt?Lang=zh-TW",
     "BOT_FX": "https://rate.bot.com.tw/xrt/fltxt/0/day",
     "BOT_FX_CSV": "https://rate.bot.com.tw/xrt/flcsv/0/day",
     "TWSE_INST": "https://www.twse.com.tw/rwd/zh/fund/BFI82U",

@@ -56,6 +56,21 @@ class TestParse(unittest.TestCase):
         self.assertIn("Access Denied", info)
         self.assertIn("Your IP is not allowed", info)
 
+    def test_html_page_order_and_timestamp(self):  # 網頁版順序是 現金買入、現金賣出、即期買入、即期賣出；每個幣別名稱與價格出現兩次
+        row = lambda nm, c, v: ('<tr><td><div class="visible-phone">%s (%s)</div><div>%s (%s)</div></td>' % (nm, c, nm, c)) + "".join("<td>%s</td>" % x for x in v) + '<td><a>查詢</a></td><td><a>查詢</a></td>' + "".join("<td>%s</td>" % x for x in v) + "</tr>"
+        page = ("<html><script>var a=(USD);</script><h1>2026/11/26 本行營業時間牌告匯率</h1><p>牌價最新掛牌時間：2026/11/26 10:01</p><table>" +
+                row("美金", "USD", ["32.66", "33.33", "33.01", "33.11"]) + row("韓元", "KRW", ["-", "-", "0.0227", "0.0245"]) + row("日圓", "JPY", ["0.2031", "0.2161", "0.2072", "0.2102"]) + "</table></html>")
+        q, when = bankfx.parse_html(page)
+        self.assertEqual(q["USD"]["cash"], (32.66, 33.33))   # 現金：買入 32.66、賣出 33.33
+        self.assertEqual(q["USD"]["spot"], (33.01, 33.11))   # 即期：買入 33.01、賣出 33.11
+        self.assertIsNone(q["KRW"]["cash"])
+        self.assertEqual(q["JPY"]["spot"], (0.2072, 0.2102))
+        self.assertEqual(when, "2026-11-26T10:01:00+08:00")
+
+    def test_challenge_page_gives_nothing(self):
+        q, when = bankfx.parse_html("<html><head><title>Challenge Validation</title></head><body>Challenge Validation</body></html>")
+        self.assertEqual((q, when), ({}, None))
+
     def test_garbage(self):
         self.assertEqual(bankfx.parse("<html>blocked</html>"), {})
         self.assertEqual(bankfx.parse(None), {})
@@ -84,9 +99,20 @@ class TestBuild(unittest.TestCase):
 
 
 class TestEndToEnd(Base):
+    def test_falls_back_to_text_file_when_page_is_challenged(self):  # 網頁被擋（驗證頁）→ 改抓文字檔，資料一樣，只是沒有掛牌時間
+        os.environ["MOCK_BOT_HTML_DOWN"] = "1"
+        try:
+            self.assertEqual(self.go("--mode", "daily"), 0)
+        finally:
+            os.environ.pop("MOCK_BOT_HTML_DOWN", None)
+        doc = self.doc("bankfx")
+        self.assertIsNone(doc["quoted_at"])
+        self.assertEqual((doc["items"][0]["cash"]["sell"], doc["items"][0]["spot"]["sell"]), (33.2, 32.95))
+
     def test_daily_run_writes_bankfx_and_keeps_cache_when_source_fails(self):
         self.assertEqual(self.go("--mode", "daily"), 0)
         doc = self.doc("bankfx")
+        self.assertEqual(doc["quoted_at"], "2026-11-26T10:01:00+08:00")  # 優先用網頁，帶掛牌時間
         codes = [i["code"] for i in doc["items"]]
         self.assertEqual(codes, ["USD", "JPY", "EUR", "CNY", "AUD", "HKD", "GBP", "KRW", "SGD"])
         self.assertIsNone([i for i in doc["items"] if i["code"] == "KRW"][0]["cash"])  # 現鈔沒報價就不顯示

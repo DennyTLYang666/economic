@@ -237,7 +237,7 @@ class H(BaseHTTPRequestHandler):
             if body is None:
                 return self._send(404, json.dumps({"chart": {"result": None, "error": {"description": "No data"}}}))
             return self._send(200, json.dumps(body))
-        if u.path == "/bot":  # 臺灣銀行牌告匯率 fltxt：每幣別兩行（買入／賣出），每行 現金 即期 遠期×7；MOCK_BOT_DOWN=1 模擬失敗
+        if u.path in ("/bot", "/bot_html"):  # 臺灣銀行牌告匯率 fltxt：每幣別兩行（買入／賣出），每行 現金 即期 遠期×7；MOCK_BOT_DOWN=1 模擬失敗
             if os.environ.get("MOCK_BOT_DOWN") == "1":
                 return self._send(500, "{}")
             z = "0.00000"
@@ -251,6 +251,19 @@ class H(BaseHTTPRequestHandler):
             rows = [r for r in rows if r[0] != "KRW"] + [("KRW", (0.0, mids["KRW"] * 0.995), (0.0, mids["KRW"] * 1.005))]  # 韓元現鈔沒報價
             if os.environ.get("MOCK_BOT_BAD") == "1":
                 rows = [r for r in rows if r[0] != "AUD"] + [("AUD", (30.0, 29.0), (28.0, 27.0))]  # 賣出低於買入、離市場價很遠：應被丟棄
+            if u.path == "/bot_html":
+                if os.environ.get("MOCK_BOT_HTML_DOWN") == "1":  # 模擬被擋：回「Challenge Validation」驗證頁
+                    return self._send(200, "<!DOCTYPE html><html><head><title>Challenge Validation</title></head><body>Challenge Validation</body></html>", "text/html; charset=utf-8")
+                names = {"USD": "美金", "JPY": "日圓", "EUR": "歐元", "CNY": "人民幣", "AUD": "澳幣", "HKD": "港幣", "GBP": "英鎊", "KRW": "韓元", "SGD": "新加坡幣", "AUDX": ""}
+                g = lambda v: ("%.4f" % v) if v else "-"
+                trs = ""
+                for code, b, sl in rows:
+                    cells = "<td>%s</td><td>%s</td><td>%s</td><td>%s</td>" % (g(b[0]), g(sl[0]), g(b[1]), g(sl[1]))
+                    trs += ('<tr><td><div class="visible-phone print_hide">%s (%s)</div><div class="hidden-phone print_show">%s (%s)</div></td>%s'
+                            '<td><a href="/fwd">查詢</a></td><td><a href="/hist">查詢</a></td>%s</tr>' % (names.get(code, code), code, names.get(code, code), code, cells, cells))
+                page = ('<html><head><title>臺灣銀行牌告匯率</title><script>var x=1;</script></head><body><h1>2026/11/26 本行營業時間牌告匯率</h1>'
+                        '<p>牌價最新掛牌時間：2026/11/26 10:01</p><table><thead><tr><th>幣別</th><th>本行買入</th><th>本行賣出</th></tr></thead><tbody>%s</tbody></table></body></html>' % trs)
+                return self._send(200, page, "text/html; charset=utf-8")
             head = "幣別 匯率 現金 即期 遠期10天 遠期30天 遠期60天 遠期90天 遠期120天 遠期150天 遠期180天 匯率 現金 即期 遠期10天 遠期30天 遠期60天 遠期90天 遠期120天 遠期150天 遠期180天\n"
             body = head
             for code, b, sl in rows:
@@ -336,7 +349,7 @@ def env_for(srv):
     base = "http://127.0.0.1:%d" % srv.server_address[1]
     return {"ECO_URL_YAHOO": base + "/yahoo", "ECO_URL_FRED": base + "/fred", "ECO_URL_CALENDAR": base + "/cal/this",
             "ECO_URL_CALENDAR_NEXT": base + "/cal/next", "ECO_URL_NDC_META": base + "/ndc/meta", "ECO_URL_NEWS": base + "/news", "ECO_URL_POLYMARKET": base + "/poly", "ECO_URL_AI": base + "/ai",
-            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_BOT_FX": base + "/bot", "ECO_URL_BOT_FX_CSV": base + "/bot", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
+            "ECO_URL_FUND_TLIFE": base + "/fund/tlife", "ECO_URL_TWSE_INST": base + "/twse", "ECO_URL_BOT_FX_HTML": base + "/bot_html", "ECO_URL_BOT_FX": base + "/bot", "ECO_URL_BOT_FX_CSV": base + "/bot", "ECO_URL_TAIFEX_FUT": base + "/taifex", "ECO_URL_FUND_NANSHAN": base + "/fund/nanshan"}
 
 
 if __name__ == "__main__":

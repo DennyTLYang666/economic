@@ -46,7 +46,7 @@ def taifex():
 
 
 def bot():
-    for key in ("BOT_FX", "BOT_FX_CSV"):
+    for key in ("BOT_FX_HTML", "BOT_FX", "BOT_FX_CSV"):
         print("--", key)
         try:
             raw = http_get(url(key))
@@ -55,7 +55,9 @@ def bot():
             continue
         print("GET", url(key), "→", len(raw), "bytes")
         print(raw[:500].decode("utf-8-sig", "replace"))
-        got = bankfx.parse(raw)
+        got, when = bankfx.parse_html(raw) if key == "BOT_FX_HTML" else (bankfx.parse(raw), None)
+        if when:
+            print("掛牌時間：", when)
         for code in ("USD", "JPY", "EUR"):
             print(code, got.get(code, "沒有解析到"))
         print("共解析到 %d 個幣別" % len(got), "｜", bankfx._peek(raw) if not got else "")

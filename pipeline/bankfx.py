@@ -61,6 +61,44 @@ def parse(text):
     return out
 
 
+def parse_html(text):
+    """解析 https://rate.bot.com.tw/xrt?Lang=zh-TW 網頁。回傳 (報價, 掛牌時間 ISO 字串或 None)。
+    順序和文字檔不同：每個幣別是 現金買入、現金賣出、即期買入、即期賣出（「-」＝沒報價）；幣別名稱與價格在頁面裡各出現兩次（手機版／桌機版），取第一組。
+    只看可見文字，不依賴 class 或 data 屬性。"""
+    t = _decode(text)
+    t = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", t, flags=re.S | re.I)
+    t = re.sub(r"<[^>]+>", " ", t).replace("&nbsp;", " ")
+    toks = t.split()
+    out, i = {}, 0
+    while i < len(toks):
+        m = re.fullmatch(r"\(([A-Z]{3})\)", toks[i])
+        if m and m.group(1) not in out:
+            code, vals, k = m.group(1), [], i + 1
+            while k < len(toks) and len(vals) < 4:
+                if re.fullmatch(r"\(([A-Z]{3})\)", toks[k]):
+                    if toks[k] != "(%s)" % code:
+                        break  # 下一個幣別了，這個幣別資料不完整
+                elif re.fullmatch(r"-?[\d,]*\.?\d+", toks[k]):
+                    vals.append(num(toks[k].replace(",", "")))
+                elif toks[k] == "-":
+                    vals.append(None)
+                elif vals:
+                    break
+                k += 1
+            if len(vals) == 4:
+                def pair(b, s_):
+                    return (b, s_) if b and s_ and b > 0 and s_ >= b else None
+                out[code] = {"cash": pair(vals[0], vals[1]), "spot": pair(vals[2], vals[3])}
+            i = k
+            continue
+        i += 1
+    when = None
+    m = re.search(r"牌價最新掛牌時間[：:]\s*(\d{4})/(\d{2})/(\d{2})\s+(\d{2}):(\d{2})", t)
+    if m:
+        when = "%s-%s-%sT%s:%s:00+08:00" % m.groups()  # 臺灣銀行掛牌時間是台北時間
+    return out, when
+
+
 def _peek(raw):
     """收到的不是匯率檔時，回報它是什麼（標題與可見文字開頭），方便從 meta.json 直接判斷是被擋、導向還是改版。"""
     t = _decode(raw)
@@ -71,18 +109,18 @@ def _peek(raw):
 
 
 def fetch():
-    """先抓文字檔（fltxt），解析不到再抓官方 CSV（flcsv，同一份資料）。兩個都失敗才報錯。"""
+    """回傳 (報價, 掛牌時間)。依序試：牌告匯率網頁（有掛牌時間）、文字檔 fltxt、官方 CSV flcsv；三個都失敗才報錯。"""
     errs = []
-    for key in ("BOT_FX", "BOT_FX_CSV"):
+    for key in ("BOT_FX_HTML", "BOT_FX", "BOT_FX_CSV"):
         try:
             raw = http_get(url(key))
         except SourceError as e:
             errs.append(str(e))
             continue
-        got = parse(raw)
+        got, when = parse_html(raw) if key == "BOT_FX_HTML" else (parse(raw), None)
         if got:
-            return got
-        errs.append("%s 解析不到幣別（%s）" % (url(key).rsplit("/", 3)[-3], _peek(raw)))
+            return got, when
+        errs.append("%s 解析不到幣別（%s）" % (url(key).split("?")[0].rsplit("/", 3)[-3] if key != "BOT_FX_HTML" else "xrt 網頁", _peek(raw)))
     raise SourceError("臺灣銀行牌告匯率：" + "｜".join(errs))
 
 
@@ -97,7 +135,7 @@ def _mid(expr, last):
     return v
 
 
-def build(cfg, quotes, daily, now):
+def build(cfg, quotes, daily, now, quoted_at=None):
     """quotes＝parse() 的結果；daily＝{標的id: [(date, close)]}，用來算和市場中間價的差。回傳 (doc, 警告清單)。"""
     last = {k: v[-1][1] for k, v in (daily or {}).items() if v}
     items, warns = [], []
@@ -123,4 +161,4 @@ def build(cfg, quotes, daily, now):
         items.append(it)
     if not items:
         raise SourceError("牌告匯率：沒有任何幣別通過檢查")
-    return {"source": "臺灣銀行牌告匯率", "url": "https://rate.bot.com.tw/xrt", "updated": now.isoformat(timespec="seconds"), "items": items}, warns
+    return {"source": "臺灣銀行牌告匯率", "url": "https://rate.bot.com.tw/xrt", "updated": now.isoformat(timespec="seconds"), "quoted_at": quoted_at, "items": items}, warns

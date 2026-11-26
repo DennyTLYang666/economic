@@ -233,7 +233,8 @@ def main(argv=None):
     if not args.offline and bcfg.get("currencies"):
         prog.stage("銀行牌告匯率（臺灣銀行）")
         try:  # 加值資料：失敗就沿用上一次抓到的（存在 data/series/bankfx_cache.json），不影響其他資料
-            bank_doc, bwarn = bankfx.build(bcfg, bankfx.fetch(), daily, now)
+            bq, bwhen = bankfx.fetch()
+            bank_doc, bwarn = bankfx.build(bcfg, bq, daily, now, bwhen)
             atomic_write(sdir / "bankfx_cache.json", json.dumps(bank_doc, ensure_ascii=False) + "\n")
             problems += bwarn
         except (SourceError, ValueError, KeyError, TypeError, OSError) as e:

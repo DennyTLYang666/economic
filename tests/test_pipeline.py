@@ -34,7 +34,7 @@ class Base(unittest.TestCase):
         self._saved = dict(os.environ)
         os.environ.update(self.env)
         os.environ["ECO_BACKOFF"] = "0"
-        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP", "MOCK_NEWS_BIG", "MOCK_AI_FAIL", "ANTHROPIC_API_KEY", "MOCK_POLY_FAIL", "MOCK_ZQ_RATE", "MOCK_BOT_DOWN", "MOCK_BOT_BAD"):
+        for k in ("MOCK_FAIL", "MOCK_YAHOO_DOWN", "MOCK_JUMP", "MOCK_NEWS_BIG", "MOCK_AI_FAIL", "ANTHROPIC_API_KEY", "MOCK_POLY_FAIL", "MOCK_ZQ_RATE", "MOCK_BOT_DOWN", "MOCK_BOT_BAD", "MOCK_BOT_HTML_DOWN"):
             os.environ.pop(k, None)
 
     def tearDown(self):
